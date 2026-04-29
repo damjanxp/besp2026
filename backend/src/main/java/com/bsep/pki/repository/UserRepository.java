@@ -1,12 +1,11 @@
 package com.bsep.pki.repository;
 
-import com.bsep.pki.model.User;
+import com.bsep.pki.model.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
-import java.util.UUID;
 
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 

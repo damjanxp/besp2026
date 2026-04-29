@@ -1,0 +1,849 @@
+
+
+
+INFRASTRUKTURA JAVNIH KLJUČEVA (PKI)
+
+DETALJNA TEHNIČKA SPECIFIKACIJA PROJEKTA
+
+Bezbednost u sistemima elektronskog poslovanja — RA, 2025/2026
+
+
+
+
+
+1. PREGLED PROJEKTA
+PKI sistem je kompleksna web aplikacija za upravljanje digitalnim sertifikatima koja podržava ceo životni ciklus X.509 sertifikata — od generisanja do povlačenja. Uz PKI sistem, integriše se i bezbedni deljeni menadžer lozinki baziran na asimetričnoj kriptografiji.
+
+1.1 Ciljevi sistema
+    • Centralizovano upravljanje digitalnim sertifikatima (Root, Intermediate, End-Entity)
+    • Podrška za kompletan lanac poverenja (chain of trust) proizvoljne dubine
+    • Bezbedna autentifikacija korisnika sa višestrukim ulogama
+    • Integrisan password manager sa end-to-end enkripcijom
+    • Visok nivo bezbednosti — HTTPS, MFA, audit logovi, zaštita od napada
+
+1.2 Tehnički stack
+
+Sloj
+Tehnologija
+Verzija
+Napomena
+Frontend
+Angular
+17+
+TypeScript, Angular Material
+Backend
+Spring Boot
+3.x
+Java 17+, Maven
+Baza podataka
+PostgreSQL
+15+
+JPA/Hibernate
+Kriptografija
+Bouncy Castle
+1.77+
+X.509, PKI operacije
+Build/Run
+Docker + Docker Compose
+latest
+Kontejnerizacija
+CI/CD
+GitHub Actions
+—
+Opciono
+
+2. INSTALACIJA I POKRETANJE PROJEKTA
+2.1 Preduslovi — šta instalirati
+
+Alat
+Opis / Link za preuzimanje
+Komanda za provjeru
+JDK 17+
+adoptium.net — Java Development Kit
+java -version
+Maven 3.9+
+maven.apache.org — build alat za Java
+mvn -version
+Node.js 18+ / npm
+nodejs.org — za Angular frontend
+node -v && npm -v
+Angular CLI
+npm install -g @angular/cli
+ng version
+PostgreSQL 15+
+postgresql.org — ili pokrenuti via Docker
+psql --version
+Docker Desktop
+docker.com — opciono, za PostgreSQL kontejner
+docker --version
+IntelliJ IDEA
+jetbrains.com — preporučeni IDE za backend
+—
+VS Code
+code.visualstudio.com — preporučeni IDE za frontend
+—
+OpenSSL
+openssl.org — za generisanje CSR-a (testiranje)
+openssl version
+
+2.2 Ključne Maven zavisnosti (pom.xml)
+    • spring-boot-starter-web — REST API
+    • spring-boot-starter-security — autentifikacija i autorizacija
+    • spring-boot-starter-data-jpa — pristup bazi
+    • spring-boot-starter-mail — slanje emailova
+    • postgresql — JDBC drajver
+    • bcprov-jdk18on (Bouncy Castle) — X.509 sertifikati, kriptografija
+    • bcpkix-jdk18on (Bouncy Castle PKIX) — PKI operacije, CSR
+    • jjwt-api + jjwt-impl + jjwt-jackson — JWT tokeni
+    • lombok — smanjenje boilerplate koda
+    • spring-boot-starter-validation — validacija inputa
+
+2.3 Ključne npm zavisnosti (Angular)
+    • @angular/material — UI komponente
+    • @angular/cdk — Angular Component Dev Kit
+    • rxjs — reaktivno programiranje
+    • zxcvbn — estimator jačine lozinke
+    • @types/node — TypeScript Node.js tipovi
+
+3. ARHITEKTURA SISTEMA
+3.1 Struktura backend projekta (Spring Boot)
+    • src/main/java/com/pki/
+        ◦ controller/ — REST kontroleri po domenima
+        ◦ service/ — poslovna logika
+        ◦ repository/ — JPA repozitorijumi
+        ◦ model/entity/ — JPA entiteti
+        ◦ model/dto/ — Data Transfer Objects
+        ◦ security/ — JWT, filteri, konfiguracija
+        ◦ pki/ — Bouncy Castle PKI logika
+        ◦ config/ — Spring konfiguracije
+        ◦ exception/ — globalni exception handler
+
+3.2 Struktura frontend projekta (Angular)
+    • src/app/
+        ◦ auth/ — login, register, forgot-password komponente
+        ◦ certificates/ — prikaz, izdavanje, povlačenje
+        ◦ admin/ — admin panel, upravljanje CA korisnicima
+        ◦ password-manager/ — password manager komponente
+        ◦ shared/ — zajednički servisi, interceptori, gardi
+        ◦ core/ — modeli, konstante, helperi
+
+4. MODEL PODATAKA
+4.1 Tabele i entiteti
+
+Tabela: users
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK, AUTO_INCREMENT
+Jedinstveni identifikator
+email
+VARCHAR(255)
+UNIQUE, NOT NULL
+Email adresa
+password
+VARCHAR(255)
+NOT NULL
+BCrypt hash lozinke
+first_name
+VARCHAR(100)
+NOT NULL
+Ime
+last_name
+VARCHAR(100)
+NOT NULL
+Prezime
+organization
+VARCHAR(255)
+NULL
+Organizacija
+role
+ENUM
+NOT NULL
+ADMIN, CA_USER, END_ENTITY
+is_active
+BOOLEAN
+DEFAULT FALSE
+Da li je nalog aktiviran
+created_at
+TIMESTAMP
+NOT NULL
+Datum kreiranja
+updated_at
+TIMESTAMP
+NOT NULL
+Datum izmene
+
+Tabela: activation_tokens
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+token
+VARCHAR(255)
+UNIQUE, NOT NULL
+UUID token
+user_id
+BIGINT
+FK -> users
+Vlasnik tokena
+type
+ENUM
+NOT NULL
+ACTIVATION, PASSWORD_RESET
+expires_at
+TIMESTAMP
+NOT NULL
+Vreme isteka
+used
+BOOLEAN
+DEFAULT FALSE
+Da li je iskorišten
+
+Tabela: certificates
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+serial_number
+VARCHAR(255)
+UNIQUE, NOT NULL
+Serijski broj sertifikata
+type
+ENUM
+NOT NULL
+ROOT, INTERMEDIATE, END_ENTITY
+common_name
+VARCHAR(255)
+NOT NULL
+CN iz X.500 Name
+issuer_id
+BIGINT
+FK -> certificates
+Izdavalac (null za Root)
+owner_id
+BIGINT
+FK -> users
+Vlasnik sertifikata
+valid_from
+TIMESTAMP
+NOT NULL
+Početak važenja
+valid_to
+TIMESTAMP
+NOT NULL
+Kraj važenja
+status
+ENUM
+NOT NULL
+ACTIVE, REVOKED, EXPIRED
+revocation_reason
+VARCHAR(255)
+NULL
+X.509 razlog povlačenja
+keystore_alias
+VARCHAR(255)
+NULL
+Alias u keystore fajlu
+certificate_data
+TEXT
+NULL
+PEM enkodovan sertifikat
+created_at
+TIMESTAMP
+NOT NULL
+Datum kreiranja
+
+Tabela: active_sessions (JWT tokeni)
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+user_id
+BIGINT
+FK -> users
+Vlasnik sesije
+token_fingerprint
+VARCHAR(255)
+UNIQUE, NOT NULL
+Hash ili jti JWT tokena
+ip_address
+VARCHAR(50)
+NULL
+IP adresa klijenta
+user_agent
+TEXT
+NULL
+Browser/device info
+last_activity
+TIMESTAMP
+NOT NULL
+Poslednja aktivnost
+expires_at
+TIMESTAMP
+NOT NULL
+Vreme isteka JWT-a
+is_revoked
+BOOLEAN
+DEFAULT FALSE
+Da li je opozvan
+
+Tabela: password_entries
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+site_name
+VARCHAR(255)
+NOT NULL
+Naziv sajta/servisa
+username
+VARCHAR(255)
+NOT NULL
+Korisničko ime
+owner_id
+BIGINT
+FK -> users
+Vlasnik unosa
+created_at
+TIMESTAMP
+NOT NULL
+Datum kreiranja
+created_by
+BIGINT
+FK -> users
+Ko je kreirao unos
+updated_at
+TIMESTAMP
+NOT NULL
+Datum izmene
+
+Tabela: password_shares (enkriptovane lozinke po korisniku)
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+entry_id
+BIGINT
+FK -> password_entries
+Unos lozinke
+user_id
+BIGINT
+FK -> users
+Korisnik koji ima pristup
+encrypted_password
+TEXT
+NOT NULL
+Lozinka enkriptovana javnim ključem korisnika
+shared_at
+TIMESTAMP
+NOT NULL
+Vreme deljenja
+shared_by
+BIGINT
+FK -> users
+Ko je podelio
+
+Tabela: certificate_templates
+Polje
+Tip
+Constraints
+Opis
+id
+BIGINT
+PK
+Identifikator
+name
+VARCHAR(255)
+NOT NULL
+Naziv šablona
+ca_user_id
+BIGINT
+FK -> users
+Vlasnik šablona (CA korisnik)
+issuer_cert_id
+BIGINT
+FK -> certificates
+CA sertifikat koji se koristi
+cn_regex
+VARCHAR(500)
+NULL
+Regex za validaciju CN
+san_regex
+VARCHAR(500)
+NULL
+Regex za validaciju SAN
+max_ttl_days
+INT
+NOT NULL
+Maksimalno trajanje u danima
+key_usage
+VARCHAR(500)
+NULL
+JSON lista key usage-a
+extended_key_usage
+VARCHAR(500)
+NULL
+JSON lista extended key usage-a
+created_at
+TIMESTAMP
+NOT NULL
+Datum kreiranja
+
+
+5. DETALJNA FUNKCIONALNA SPECIFIKACIJA
+5.1 Registracija (Student 1 — F2.1)
+5.1.1 Opis
+Jedino obični korisnici (END_ENTITY) mogu da se sami registruju. Forma za registraciju dostupna je na javnoj ruti /register.
+
+5.1.2 Tok registracije
+    • Korisnik popunjava formu: email, lozinka (2x), ime, prezime, organizacija
+    • Frontend validacija: format emaila, podudaranje lozinki, minimalni zahtevi, estimator jačine (zxcvbn)
+    • POST /api/auth/register — backend kreira neaktivnog korisnika (is_active = false)
+    • Backend generiše UUID token, čuva u activation_tokens sa expires_at = now + 24h
+    • Backend šalje email sa linkom: https://app/activate?token={uuid}
+    • Korisnik klikne link — GET /api/auth/activate?token={uuid}
+    • Backend proverava: token postoji, nije iskorišten (used=false), nije istekao
+    • Ako je validan: is_active = true, used = true
+    • Redirect na login stranicu sa porukom o uspešnoj aktivaciji
+
+5.1.3 Validacija lozinke (OWASP standard)
+    • Minimalna dužina: 12 karaktera
+    • Obavezno: velika slova, mala slova, brojevi, specijalni karakteri
+    • Frontend: zxcvbn estimator (score 0-4, minimum score 3)
+    • Backend: Bean Validation anotacije + custom validator
+
+5.1.4 Bezbednosne napomene
+    • Ne otkrivati da li email već postoji (generic error poruka)
+    • Rate limiting na /register endpoint-u
+    • Email link mora biti HTTPS
+
+5.2 Prijava na sistem (Student 1 — F2.2)
+5.2.1 Opis
+Korisnici se prijavljuju email/lozinka kombinacijom uz obaveznu CAPTCHA verifikaciju (od KT2).
+
+5.2.2 Tok prijave
+    • POST /api/auth/login — {email, password, captchaToken}
+    • Backend verifikuje CAPTCHA token (Google reCAPTCHA / Cloudflare)
+    • Proverava da li korisnik postoji i da li je aktivan
+    • BCrypt provjera lozinke
+    • Generiše JWT access token (15 min) i refresh token (7 dana)
+    • Čuva fingerprint tokena u active_sessions tabeli
+    • Vrača tokene klijentu (access u response body, refresh u HttpOnly cookie)
+
+5.2.3 JWT konfiguracija
+    • Algoritam: RS256 (asimetrični ključevi) ili HS512 (simetrični)
+    • Payload: userId, email, role, jti (unique token ID), iat, exp
+    • Access token: 15 minuta
+    • Refresh token: 7 dana
+
+5.3 Oporavak naloga (Student 2 — F2.3)
+5.3.1 Opis
+Korisnik može da resetuje lozinku putem email linka.
+
+    • POST /api/auth/forgot-password — {email}
+    • Backend uvijek vrača isti odgovor (ne otkriva da li email postoji)
+    • Ako korisnik postoji: generiše token, šalje email sa linkom
+    • Link: https://app/reset-password?token={uuid}, važi 1 sat, jednokratan
+    • PUT /api/auth/reset-password — {token, newPassword, confirmPassword}
+    • Backend validira token, ažurira lozinku, invalidira sve aktivne sesije korisnika
+
+5.4 Praćenje aktivnih tokena (Student 1 — F2.4)
+5.4.1 Opis
+Korisnik vidi listu svih aktivnih sesija i može da opozove bilo koju.
+
+    • GET /api/users/me/sessions — lista aktivnih (is_revoked=false) sesija korisnika
+    • Prikazati: IP adresa, user agent (browser/OS), last_activity, expires_at
+    • DELETE /api/users/me/sessions/{sessionId} — opoziv konkretne sesije
+    • Opoziv: is_revoked = true (JWT je i dalje u memoriji klijenta ali backend ga odbija)
+    • Svaki zaštićeni zahtev prolazi kroz filter koji proverava is_revoked po jti polju
+    • NAPOMENA: Tokeni se ne čuvaju celi u bazi — samo fingerprint (jti ili hash)
+
+5.5 Izdavanje sertifikata (Student 1 — F2.5)
+5.5.1 Opis
+Centralni deo sistema. Podržava generisanje Root, Intermediate i End-Entity sertifikata.
+
+5.5.2 Tok za Admin/CA korisnika
+    • Korisnik bira tip sertifikata (Root / Intermediate / End-Entity)
+    • Unosi X.500 Name podatke: CN, O, OU, C, ST, L, emailAddress
+    • Bira CA sertifikat koji će potpisati novi sertifikat (za Root = self-signed)
+    • Unosi period važenja (mora biti unutar perioda CA sertifikata)
+    • Bira ekstenzije: BasicConstraints, KeyUsage, ExtendedKeyUsage, SANs, CDP
+    • POST /api/certificates — backend generiše, potpisuje i čuva sertifikat
+
+5.5.3 Validacije na backendu
+    • CA sertifikat mora biti ACTIVE status
+    • CA sertifikat mora imati keyCertSign u KeyUsage
+    • Period važenja novog sertifikata mora biti unutar perioda CA sertifikata
+    • CA sertifikat ne sme biti povučen (provjera CRL/OCSP)
+    • CA korisnik može koristiti samo sertifikate iz svog lanca
+
+5.5.4 Bouncy Castle implementacija
+    • Generisanje ključeva: KeyPairGenerator sa RSA 2048/4096 ili EC P-256/P-384
+    • Gradnja sertifikata: X509v3CertificateBuilder
+    • Potpisivanje: ContentSigner sa SHA256WithRSAEncryption ili SHA256WithECDSA
+    • Čuvanje: KeyStore.getInstance("PKCS12") ili "JKS"
+
+5.6 Čuvanje CA sertifikata (Student 2 — F2.6)
+    • Svaki CA sertifikat čuva se u PKCS12 keystore fajlu na disku
+    • Keystore sadrži: privatni ključ + sertifikat + kompletan lanac
+    • Lozinka za keystore: nasumično generisana (SecureRandom), enkriptovana AES-256 ili PBKDF2
+    • Ključ za enkripciju: jedan simetrični ključ po CA korisniku
+    • Enkriptovana lozinka čuva se u bazi (polje keystore_password_encrypted u users tabeli)
+    • Alternativa: OS keychain (Windows Credential Manager / macOS Keychain)
+
+5.7 Čuvanje EE sertifikata (Student 2 — F2.7)
+    • EE sertifikati NE smeju imati privatni ključ na serveru
+    • Čuvanje kao TrustedCertificateEntry u keystore ILI PEM format u bazi (certificate_data TEXT polje)
+    • PEM format: Base64 enkodovan DER sa -----BEGIN CERTIFICATE----- header-om
+    • Korisnik može preuzeti sertifikat u PEM, DER ili P7B formatu
+
+5.8 CSR — Certificate Signing Request (Student 3 — F2.8)
+    • Korisnik lokalno generiše CSR putem OpenSSL-a: openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -out request.csr
+    • Uploaduje CSR fajl (.pem format) kroz formu
+    • Bira CA sertifikat za potpisivanje
+    • Unosi željeno trajanje (mora biti unutar perioda CA)
+    • Backend parsira CSR, validira potpis, ekstrahuje X.500 Name i javni ključ
+    • Potpisuje CSR i vraća EE sertifikat korisniku
+    • Bouncy Castle: PKCS10CertificationRequest za parsiranje CSR-a
+
+5.9 Pregled i pristup sertifikatima (Student 2 — F2.9)
+    • GET /api/certificates — lista sertifikata (filtrirana po ulozi)
+    • Admin vidi sve sertifikate u sistemu
+    • CA korisnik vidi samo sertifikate iz svog lanca
+    • Obični korisnik vidi samo svoje EE sertifikate
+    • GET /api/certificates/{id} — detalji sertifikata
+    • GET /api/certificates/{id}/download — preuzimanje (PEM/DER/P7B)
+    • Paginacija i filtriranje: po tipu, statusu, vlasniku, datumu
+
+5.10 Povlačenje sertifikata (Student 1 — F2.10)
+    • PUT /api/certificates/{id}/revoke — {reason}
+    • X.509 razlozi: unspecified, keyCompromise, cACompromise, affiliationChanged, superseded, cessationOfOperation, certificateHold, privilegeWithdrawn, aACompromise
+    • Povučeni sertifikat ne može da se koristi za dalnje izdavanje
+    • Ako se povlači CA sertifikat, rekurzivno se povlače i svi izdati sertifikati iz tog lanca
+    • CRL (Certificate Revocation List): backend generiše CRL fajl dostupan na javnoj URL
+    • OCSP (opciono): endpoint koji odgovara na OCSP zahteve
+    • CRL Distribution Point ekstenzija se dodaje pri kreiranju sertifikata
+
+5.11 Šabloni (Student 3 — F2.11)
+    • CA korisnik kreira šablon: naziv, CA issuer, CN regex, SAN regex, max TTL, KeyUsage, ExtKeyUsage
+    • POST /api/templates — kreiranje šablona
+    • GET /api/templates — lista šablona za CA korisnika
+    • Prilikom izdavanja: ako postoji šablon za odabrani CA, auto-popunjava polja
+    • CN i SAN se validiraju regex-om iz šablona
+    • Korisnik može override-ovati vrednosti ali ne može preći ograničenja šablona
+
+5.12 Password Manager (Student 3 — F2.12)
+5.12.1 Čuvanje lozinke
+    • Korisnik mora imati EE sertifikat i privatni ključ
+    • Unosi: naziv sajta, korisničko ime, lozinka
+    • Frontend (WEB Crypto API) šifruje lozinku javnim ključem iz sertifikata: window.crypto.subtle.encrypt("RSA-OAEP", publicKey, passwordBytes)
+    • Šifrovana lozinka šalje se na server
+    • POST /api/password-manager — backend čuva entry + share za vlasnika
+
+5.12.2 Čitanje lozinke
+    • GET /api/password-manager — lista password entry-ja za korisnika
+    • Korisnik učitava privatni ključ sa lokalnog diska (file input)
+    • Frontend importuje ključ: window.crypto.subtle.importKey(...)
+    • Dekripcija: window.crypto.subtle.decrypt("RSA-OAEP", privateKey, encryptedBytes)
+    • Privatni ključ NIKADA ne napušta browser — dekripcija se radi 100% na frontendu
+
+5.12.3 Deljenje lozinke
+    • Korisnik bira password entry koji želi podeliti
+    • Bira korisnika sa kojim deli (GET /api/users — lista EE korisnika sa javnim ključevima)
+    • Frontend: dekripcija vlastite verzije, zatim enkriptovanje javnim ključem ciljnog korisnika
+    • POST /api/password-manager/{id}/share — backend čuva novu password_shares tabelu
+
+
+6. PODELA FUNKCIONALNOSTI PO STUDENTIMA
+
+6.1 Student 1
+ID
+Funkcionalnost
+KT / Rok
+F2.1
+Registracija korisnika
+KT1 — forma, validacija lozinke, aktivacioni email
+F2.2
+Prijava na sistem
+KT1 — JWT login; KT2 — dodati CAPTCHA
+F2.4
+Praćenje aktivnih tokena
+Finalna odbrana — sesije, opoziv tokena
+F2.5
+Izdavanje sertifikata
+KT1 — Root sertifikat; Finalna — svi tipovi + lanci
+F2.10
+Povlačenje sertifikata
+Finalna odbrana — revokacija, CRL, X.509 razlozi
+
+6.2 Student 2
+ID
+Funkcionalnost
+KT / Rok
+F2.3
+Oporavak naloga
+KT2 — forgot/reset password flow
+F2.6
+Čuvanje CA sertifikata
+KT1 — keystore, enkriptovane lozinke
+F2.7
+Čuvanje EE sertifikata
+Finalna — PEM/DER čuvanje bez private key-a
+F2.9
+Pregled i pristup sertifikatima
+KT2 — lista sa testnim podacima
+
+6.3 Student 3
+ID
+Funkcionalnost
+KT / Rok
+F2.8
+CSR (Certificate Signing Request)
+KT2 — upload i parsiranje CSR-a
+F2.11
+Šabloni za sertifikate
+Finalna — CRUD šablona, regex validacija
+F2.12
+Password Manager
+KT1 — model; KT2 — WEB Crypto; Finalna — deljenje
+
+
+7. COPILOT PROMPTOVI PO STUDENTIMA
+Ovi promptovi su dizajnirani da se šalju GitHub Copilotu (Chat) unutar IntelliJ / VS Code okruženja. Svaki prompt je samostalan i može se koristiti bez prethodnog konteksta.
+
+7.1 Promptovi za Student 1
+
+PROMPT S1-1: Spring Boot projekat setup
+S1-1: Inicijalni Spring Boot setup
+Create a Spring Boot 3.x project for a PKI (Public Key Infrastructure) system with the following setup:
+
+1. pom.xml dependencies: spring-boot-starter-web, spring-boot-starter-security, spring-boot-starter-data-jpa, spring-boot-starter-mail, spring-boot-starter-validation, postgresql driver, bcprov-jdk18on (Bouncy Castle) 1.77, bcpkix-jdk18on, jjwt-api 0.12.x, jjwt-impl, jjwt-jackson, lombok
+2. application.properties with: PostgreSQL datasource (localhost:5432/pki_db), JPA ddl-auto=update, mail config (SMTP), JWT secret and expiration config
+3. Package structure: controller, service, repository, model/entity, model/dto, security, pki, config, exception
+4. User entity with fields: id (Long), email, password, firstName, lastName, organization, role (enum: ADMIN, CA_USER, END_ENTITY), isActive (boolean), createdAt, updatedAt
+5. UserRole enum
+Include all Lombok annotations and JPA annotations.
+
+PROMPT S1-2: Registracija — backend
+S1-2: Registracija korisnika — Spring Boot backend
+Implement user registration for a PKI system in Spring Boot. Requirements:
+
+1. RegisterRequest DTO: email, password, confirmPassword, firstName, lastName, organization
+2. Password validation (custom @ValidPassword annotation): minimum 12 chars, must contain uppercase, lowercase, digit, special character
+3. ActivationToken entity: id, token (UUID), userId (FK), type (ACTIVATION/PASSWORD_RESET), expiresAt (now+24h), used (boolean)
+4. AuthService.register(): check if email exists, create inactive user (isActive=false), encode password with BCrypt, generate UUID activation token, send activation email via JavaMailSender with link https://localhost:4200/activate?token={uuid}
+5. AuthService.activateAccount(token): find token, check not expired and not used, set user isActive=true, mark token as used
+6. AuthController: POST /api/auth/register, GET /api/auth/activate
+7. GlobalExceptionHandler with @ControllerAdvice for validation errors and custom exceptions
+
+PROMPT S1-3: Registracija — Angular frontend
+S1-3: Registracija — Angular frontend
+Create an Angular 17 registration component for a PKI system using Angular Material. Requirements:
+
+1. RegisterComponent with ReactiveFormsModule: fields for email, password, confirmPassword, firstName, lastName, organization
+2. Validators: email format, password min 12 chars + regex for uppercase/lowercase/digit/special, passwords must match
+3. Password strength meter using zxcvbn library (npm install zxcvbn @types/zxcvbn). Show 5-segment colored progress bar (red to green based on score 0-4). Minimum score 3 required.
+4. AuthService with HttpClient: POST /api/auth/register
+5. On success: show message 'Provjerite email za aktivacioni link', redirect to /login
+6. ActivateAccountComponent for /activate route: reads token from query params, calls GET /api/auth/activate?token=..., shows success/error message
+7. Use Angular Material: mat-card, mat-form-field, mat-input, mat-button, mat-progress-bar
+
+PROMPT S1-4: JWT Login — backend
+S1-4: JWT autentifikacija — Spring Boot backend
+Implement JWT authentication in Spring Boot for a PKI system. Requirements:
+
+1. JwtService: generateToken(UserDetails, Map<String,Object> extraClaims), validateToken(token, UserDetails), extractUsername(token), extractClaim(). Use JJWT library (io.jsonwebtoken). JWT payload: userId, email, role, jti (UUID), iat, exp (15 min).
+2. JwtAuthenticationFilter extends OncePerRequestFilter: extract Bearer token, validate, set SecurityContext
+3. ActiveSession entity: id, userId, tokenFingerprint (jti stored as SHA-256 hash), ipAddress, userAgent, lastActivity, expiresAt, isRevoked
+4. AuthService.login(): verify user active, BCrypt password check, generate JWT, save session fingerprint to active_sessions table
+5. SecurityConfig: permit /api/auth/**, require auth for all others, add JwtAuthenticationFilter before UsernamePasswordAuthenticationFilter, CORS config for localhost:4200
+6. AuthController: POST /api/auth/login returns {token, role, email}
+7. DataInitializer implements ApplicationRunner: create default admin user on startup if not exists (email: admin@pki.com, password: from application.properties)
+
+PROMPT S1-5: Kreiranje Root sertifikata — backend (KT1)
+S1-5: Generisanje Root sertifikata — Bouncy Castle + Spring Boot (KT1)
+Implement Root (self-signed) certificate generation using Bouncy Castle in Spring Boot. Requirements:
+
+1. Add BouncyCastleProvider: Security.addProvider(new BouncyCastleProvider()) in @Configuration class
+2. CreateCertificateRequest DTO: commonName, organization, organizationalUnit, country (2 letters), state, locality, email, validFromDays (0=today), validToDays, type (ROOT/INTERMEDIATE/END_ENTITY), keySize (2048 default)
+3. CertificateService.generateRootCertificate(request, adminUser): KeyPairGenerator RSA 2048, build X500Name from DTO fields, BigInteger serialNumber = new BigInteger(64, SecureRandom), X509v3CertificateBuilder, add extensions: BasicConstraints(true, -1), KeyUsage(keyCertSign | cRLSign), SubjectKeyIdentifier, AuthorityKeyIdentifier, sign with SHA256WithRSAEncryption ContentSigner
+4. Certificate entity: id, serialNumber, type, commonName, issuerId (null for root), ownerId, validFrom, validTo, status (ACTIVE), keystoreAlias, certificateData (PEM), createdAt
+5. Save to PKCS12 keystore: KeyStore.getInstance('PKCS12'), keystore file path from application.properties, generate random keystore password (SecureRandom 32 bytes Base64)
+6. CertificateController: POST /api/certificates/root (ADMIN only, @PreAuthorize)
+
+PROMPT S1-6: Password Manager model podataka (KT1)
+S1-6: Password Manager — model podataka i skeleton API (KT1)
+Create the data model and skeleton REST API for a shared password manager in Spring Boot. Requirements:
+
+1. PasswordEntry entity: id (Long, PK), siteName (String), username (String), owner (ManyToOne -> User), createdAt, updatedAt, createdBy (ManyToOne -> User)
+2. PasswordShare entity: id, entry (ManyToOne -> PasswordEntry), user (ManyToOne -> User), encryptedPassword (TEXT - Base64 encoded RSA-OAEP encrypted), sharedAt, sharedBy (ManyToOne -> User)
+3. PasswordEntryRepository and PasswordShareRepository (JPA)
+4. PasswordManagerService: placeholder methods savePassword(), getMyPasswords(), sharePassword(), deletePassword()
+5. PasswordManagerController: skeleton endpoints GET/POST/DELETE /api/password-manager, POST /api/password-manager/{id}/share — all require authentication
+6. PasswordEntryResponse DTO: id, siteName, username, ownerId, createdAt (no encrypted password in list view)
+
+
+7.2 Promptovi za Student 2
+
+PROMPT S2-1: Oporavak naloga
+S2-1: Oporavak naloga (Forgot/Reset Password)
+Implement password recovery flow in Spring Boot + Angular. Requirements:
+
+Backend: 1. POST /api/auth/forgot-password {email}: always return 200 OK with generic message. If user exists, generate UUID token (type=PASSWORD_RESET, expires in 1 hour), send email with link https://localhost:4200/reset-password?token={uuid}
+2. PUT /api/auth/reset-password {token, newPassword, confirmPassword}: validate token (exists, not used, not expired), validate new password strength, BCrypt encode and save, mark token used, invalidate all active sessions for that user (set isRevoked=true in active_sessions)
+Frontend: 3. ForgotPasswordComponent at /forgot-password: email input field, submit calls POST /api/auth/forgot-password, show success message
+4. ResetPasswordComponent at /reset-password: reads token from query params, shows newPassword + confirmPassword fields with strength meter, submit calls PUT /api/auth/reset-password
+
+PROMPT S2-2: Čuvanje CA sertifikata — Keystore
+S2-2: Čuvanje CA sertifikata — Keystore + enkriptovane lozinke
+Implement secure CA certificate storage using PKCS12 keystore in Spring Boot. Requirements:
+
+1. KeystoreService: saveToKeystore(alias, privateKey, certificate, chain[], keystorePassword, keystorePath): KeyStore.getInstance('PKCS12'), store PrivateKeyEntry with certificate chain, save to file
+2. loadFromKeystore(alias, keystorePassword, keystorePath): returns PrivateKey and X509Certificate
+3. KeyEncryptionService: generateUserEncryptionKey(userId): SecretKeySpec with AES-256 derived via PBKDF2WithHmacSHA256 (salt=userId bytes, iterations=310000). Store derived key securely (e.g., in memory cache or re-derive each time from master secret)
+4. encryptPassword(password, aesKey): AES/GCM/NoPadding, return Base64(iv + ciphertext)
+5. decryptPassword(encryptedBase64, aesKey): extract iv (first 12 bytes), decrypt rest
+6. Add keystorePasswordEncrypted column to users table. One encrypted keystore password per CA user.
+7. Keystore files stored in {app.keystore.dir}/{userId}/{alias}.p12 (path from application.properties)
+
+PROMPT S2-3: Pregled sertifikata
+S2-3: Pregled sertifikata — API + Angular prikaz
+Implement certificate listing and details view in Spring Boot + Angular. Requirements:
+
+Backend: 1. GET /api/certificates: ADMIN returns all, CA_USER returns only certificates in their chain (recursive query: find all certs where issuer chain leads to CA user's root cert), END_ENTITY returns only their own certs
+2. GET /api/certificates/{id}: return full CertificateDetailsResponse with: serialNumber, type, commonName, organization, validFrom, validTo, status, issuerCommonName, extensions summary
+3. GET /api/certificates/{id}/download?format=PEM|DER|P7B: return file as ResponseEntity<byte[]> with appropriate Content-Type and Content-Disposition headers
+Frontend: 4. CertificateListComponent: mat-table with columns: serialNumber, type, commonName, validFrom, validTo, status (colored chip: green=ACTIVE, red=REVOKED, grey=EXPIRED), actions (view, download, revoke)
+5. CertificateDetailComponent: dialog or separate route showing all certificate fields
+6. CertificateService with HttpClient for all API calls
+
+
+7.3 Promptovi za Student 3
+
+PROMPT S3-1: CSR upload i parsiranje
+S3-1: CSR upload, parsiranje i pregled (KT2)
+Implement CSR (Certificate Signing Request) upload and parsing in Spring Boot + Angular. Requirements:
+
+Backend: 1. POST /api/csr/upload (MultipartFile csrFile, Long caId, int validDays): read PEM file, parse using Bouncy Castle PKCS10CertificationRequest.parseCSR(), validate CSR signature
+2. CsrService.parseCsr(byte[] csrBytes): return CsrInfoDto with fields from CSR: commonName, organization, email, publicKeyAlgorithm, publicKeySize
+3. GET /api/csr/preview: parse and return CSR info without signing (for preview before submission)
+Frontend: 4. CsrUploadComponent: file input (accept='.pem,.csr'), drag-and-drop zone, after file selected show parsed CSR info (CommonName, Org, etc.), dropdown to select CA certificate, number input for validDays (max = selected CA remaining days), submit button
+5. On submit: POST to /api/csr/upload, on success show download button for signed certificate
+
+PROMPT S3-2: Password Manager — WEB Crypto API (KT2)
+S3-2: Password Manager — WEB Crypto API enkripcija/dekripcija (KT2)
+Implement the frontend password encryption/decryption using Web Crypto API in Angular. Requirements:
+
+1. CryptoService (Angular): importPublicKeyFromPem(pemString): extract base64 from -----BEGIN PUBLIC KEY----- PEM, atob to ArrayBuffer, window.crypto.subtle.importKey('spki', keyBuffer, {name:'RSA-OAEP', hash:'SHA-256'}, false, ['encrypt'])
+2. encryptPassword(plaintext: string, publicKey: CryptoKey): TextEncoder to bytes, window.crypto.subtle.encrypt({name:'RSA-OAEP'}, publicKey, data), return Base64 string
+3. importPrivateKeyFromPem(pemString): extract base64 from -----BEGIN PRIVATE KEY----- PEM, importKey('pkcs8', ...)
+4. decryptPassword(encryptedBase64: string, privateKey: CryptoKey): Base64 to ArrayBuffer, window.crypto.subtle.decrypt({name:'RSA-OAEP'}, privateKey, data), TextDecoder to string
+5. PasswordManagerComponent: form to add entry (siteName, username, password text field), on save: load user's public key from their certificate (GET /api/certificates/my/public-key), encrypt password, POST to /api/password-manager
+6. List view: file input to load private key (.pem), on key loaded: for each entry decrypt encryptedPassword and show in table. Use async/await for all crypto operations.
+
+PROMPT S3-3: Šabloni za sertifikate
+S3-3: Šabloni za sertifikate (finalna odbrana)
+Implement certificate templates (šabloni) feature in Spring Boot + Angular. Requirements:
+
+Backend: 1. CertificateTemplate entity: id, name, caUserId (FK), issuerCertId (FK -> certificates), cnRegex, sanRegex, maxTtlDays, keyUsage (JSON array as String), extendedKeyUsage (JSON array as String), createdAt
+2. CRUD endpoints: POST /api/templates, GET /api/templates (filtered by CA user), GET /api/templates/{id}, PUT /api/templates/{id}, DELETE /api/templates/{id}
+3. TemplateService.validateCertificateAgainstTemplate(template, certRequest): validate CN matches cnRegex (Pattern.matches), validate SAN matches sanRegex, validate validDays <= maxTtlDays
+4. GET /api/templates/for-issuer/{issuerId}: return template for given CA certificate (used to auto-populate form)
+Frontend: 5. TemplateManagementComponent: list templates in mat-table, create/edit dialog with all template fields
+6. In certificate issuance form: when CA issuer changes, call GET /api/templates/for-issuer/{id}, auto-populate KeyUsage, ExtKeyUsage, maxTtlDays fields
+
+
+8. KT1 — ZAHTEVI I CHECKLIST
+
+#
+Zahtev
+Student
+Status
+1
+Forma za registraciju: email, lozinka (2x), ime, prezime, organizacija
+Student 1
+[ ] TODO
+2
+Validacija lozinke (OWASP min zahtevi) + estimator jačine (zxcvbn)
+Student 1
+[ ] TODO
+3
+Slanje aktivacionog linka na email (jednokratan, vremenski ograničen 24h)
+Student 1
+[ ] TODO
+4
+Prijava korisnika — login forma + JWT autentifikacija
+Student 1
+[ ] TODO
+5
+Kreiranje inicijalnog administratora (seed pri pokretanju)
+Student 1
+[ ] TODO
+6
+Kreiranje i čuvanje Root sertifikata (Admin, Bouncy Castle, PKCS12 keystore)
+Student 1 + 2
+[ ] TODO
+7
+Password Manager — model podataka (entiteti, tabele, skeleton API)
+Student 3
+[ ] TODO
+
+8.1 Redosled implementacije za Student 1 — danas (KT1)
+    • KORAK 1: Kreirati Spring Boot projekat na start.spring.io — dodati sve zavisnosti iz sekcije 2.2
+    • KORAK 2: Kreirati Angular projekat — ng new pki-frontend --routing --style=scss
+    • KORAK 3: Implementirati User entitet, UserRole enum, UserRepository
+    • KORAK 4: Implementirati DataInitializer — kreira admina pri pokretanju
+    • KORAK 5: Implementirati JWT (JwtService, JwtFilter, SecurityConfig)
+    • KORAK 6: Implementirati registraciju — RegisterRequest DTO, @ValidPassword, AuthService.register(), aktivacioni email
+    • KORAK 7: Implementirati login — AuthService.login(), /api/auth/login endpoint
+    • KORAK 8: Angular — LoginComponent, RegisterComponent, ActivateAccountComponent, AuthService
+    • KORAK 9: Implementirati generisanje Root sertifikata (Bouncy Castle) — koordinacija sa Studentom 2 za keystore
+    • KORAK 10: Testirati kompletan flow: registracija -> aktivacija -> login -> kreiranje root sertifikata
+
+
+9. OPŠTI TEHNIČKI ZAHTEVI
+
+9.1 Bezbednost
+    • HTTPS: Self-signed ili CA sertifikat za sve servise (bonus poeni za PKI-generisan sertifikat)
+    • CORS: Konfigurisan za konkretne origins (ne wildcard *)
+    • SQL Injection: Isključivo JPA/Hibernate sa parametrizovanim upitima, zabranjeno string concatenation
+    • XSS: Angular automatski escapeuje HTML, dodatni sanitization za dynamički sadržaj
+    • Dependency scan: proveriti poznate ranjivosti (OWASP Dependency Check plugin za Maven)
+    • Verzije biblioteka: koristiti najnovije stabilne verzije
+
+9.2 Logovanje (Logging)
+    • Framework: SLF4J + Logback (ugrađen u Spring Boot)
+    • Log format: timestamp | level | thread | class | message | metadata
+    • Loguje se: svaki login pokušaj (uspješan i neuspješan), registracija, kreiranje sertifikata, povlačenje sertifikata, pristup admin funkcionalnostima
+    • Log rotacija: maksimalna veličina fajla 10MB, čuvati 30 dana
+    • Ne loguju se: lozinke, privatni ključevi, enkriptovani podaci
+
+9.3 GitHub i workflow
+    • Repozitorijum kreirati putem GitHub Classroom linka
+    • Branching: main grana je uvijek deployable; feature grane za razvoj
+    • Commit poruke: opisne i smislene (ne 'fix', 'update', 'asdf')
+    • Sve funkcionalnosti za KT/odbranu moraju biti na main grani u trenutku odbrane
+    • Zabranjeni su commit-ovi nakon roka

@@ -1,0 +1,25 @@
+﻿<div class="activate-container">
+  <mat-card>
+    <mat-card-content>
+      <!-- Loading -->
+      <div class="status-box" *ngIf="isLoading">
+        <mat-spinner diameter="48"></mat-spinner>
+        <p>Aktivacija naloga u toku...</p>
+      </div>
+      <!-- Success -->
+      <div class="status-box success" *ngIf="!isLoading && isSuccess">
+        <mat-icon class="status-icon success-icon">check_circle</mat-icon>
+        <h2>Nalog uspjesno aktiviran!</h2>
+        <p>Sada se mozete prijaviti.</p>
+        <button mat-raised-button color="primary" (click)="goToLogin()">Idi na prijavu</button>
+      </div>
+      <!-- Error -->
+      <div class="status-box error" *ngIf="!isLoading && !isSuccess && errorMessage">
+        <mat-icon class="status-icon error-icon">error</mat-icon>
+        <h2>Greska</h2>
+        <p>{{ errorMessage }}</p>
+        <button mat-raised-button (click)="goToLogin()">Nazad</button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

@@ -1,0 +1,49 @@
+﻿<div class="list-container">
+  <div class="header-row">
+    <h2>Upravljanje sertifikatima</h2>
+    <button mat-raised-button color="primary" *ngIf="isAdmin" (click)="goToCreate()">
+      Kreiraj Root sertifikat
+    </button>
+  </div>
+  <mat-spinner *ngIf="isLoading" diameter="40" class="center-spinner"></mat-spinner>
+  <div *ngIf="!isLoading && dataSource.data.length === 0" class="empty-message">
+    <mat-icon>description</mat-icon>
+    <p>Nema sertifikata</p>
+  </div>
+  <table mat-table [dataSource]="dataSource" class="full-width" *ngIf="!isLoading && dataSource.data.length > 0">
+    <ng-container matColumnDef="serialNumber">
+      <th mat-header-cell *matHeaderCellDef>Serijski broj</th>
+      <td mat-cell *matCellDef="let cert">{{ cert.serialNumber | slice:0:16 }}...</td>
+    </ng-container>
+    <ng-container matColumnDef="type">
+      <th mat-header-cell *matHeaderCellDef>Tip</th>
+      <td mat-cell *matCellDef="let cert">
+        <span class="chip" [style.background-color]="getTypeColor(cert.type)">{{ cert.type }}</span>
+      </td>
+    </ng-container>
+    <ng-container matColumnDef="commonName">
+      <th mat-header-cell *matHeaderCellDef>Common Name</th>
+      <td mat-cell *matCellDef="let cert">{{ cert.commonName }}</td>
+    </ng-container>
+    <ng-container matColumnDef="organization">
+      <th mat-header-cell *matHeaderCellDef>Organizacija</th>
+      <td mat-cell *matCellDef="let cert">{{ cert.organization }}</td>
+    </ng-container>
+    <ng-container matColumnDef="validFrom">
+      <th mat-header-cell *matHeaderCellDef>Važi od</th>
+      <td mat-cell *matCellDef="let cert">{{ cert.validFrom | date:'dd.MM.yyyy' }}</td>
+    </ng-container>
+    <ng-container matColumnDef="validTo">
+      <th mat-header-cell *matHeaderCellDef>Važi do</th>
+      <td mat-cell *matCellDef="let cert">{{ cert.validTo | date:'dd.MM.yyyy' }}</td>
+    </ng-container>
+    <ng-container matColumnDef="status">
+      <th mat-header-cell *matHeaderCellDef>Status</th>
+      <td mat-cell *matCellDef="let cert">
+        <span class="chip" [style.background-color]="getStatusColor(cert.status)">{{ cert.status }}</span>
+      </td>
+    </ng-container>
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+</div>

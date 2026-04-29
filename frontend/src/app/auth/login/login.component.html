@@ -1,0 +1,36 @@
+﻿<div class="login-container">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>PKI System &#8212; Prijava</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" placeholder="email@primer.com">
+          <mat-error *ngIf="loginForm.get('email')?.hasError('required')">Email je obavezan</mat-error>
+          <mat-error *ngIf="loginForm.get('email')?.hasError('email')">Unesite validan email</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Lozinka</mat-label>
+          <input matInput [type]="hidePassword ? 'password' : 'text'" formControlName="password">
+          <button mat-icon-button matSuffix type="button" (click)="hidePassword = !hidePassword">
+            <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          <mat-error *ngIf="loginForm.get('password')?.hasError('required')">Lozinka je obavezna</mat-error>
+        </mat-form-field>
+        <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+        <div class="button-row">
+          <button mat-raised-button color="primary" type="submit" class="full-width"
+                  [disabled]="loginForm.invalid || isLoading">
+            <mat-spinner *ngIf="isLoading" diameter="20" class="inline-spinner"></mat-spinner>
+            <span *ngIf="!isLoading">Prijavi se</span>
+          </button>
+        </div>
+      </form>
+      <p class="register-link">
+        Nemate nalog? <a routerLink="/register">Registrujte se</a>
+      </p>
+    </mat-card-content>
+  </mat-card>
+</div>

@@ -1,0 +1,14 @@
+﻿<mat-toolbar color="primary">
+  <span>PKI System</span>
+  <span class="spacer"></span>
+  <ng-container *ngIf="authService.isLoggedIn(); else notLoggedIn">
+    <span class="user-email">{{ authService.getEmail() }}</span>
+    <button mat-button routerLink="/certificates">Sertifikati</button>
+    <button mat-button (click)="logout()">Odjavi se</button>
+  </ng-container>
+  <ng-template #notLoggedIn>
+    <button mat-button routerLink="/login">Prijava</button>
+    <button mat-button routerLink="/register">Registracija</button>
+  </ng-template>
+</mat-toolbar>
+<router-outlet></router-outlet>

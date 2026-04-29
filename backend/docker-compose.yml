@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pki-postgres
+    environment:
+      POSTGRES_DB: pki_db
+      POSTGRES_USER: pki_user
+      POSTGRES_PASSWORD: pki_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - pki_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pki_pgdata:

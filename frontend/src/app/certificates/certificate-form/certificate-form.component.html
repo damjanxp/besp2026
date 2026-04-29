@@ -1,0 +1,67 @@
+﻿<div class="form-container">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Kreiranje Root sertifikata</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="certForm" (ngSubmit)="onSubmit()">
+        <h3>X.500 Podaci o subjektu</h3>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Common Name (CN)</mat-label>
+          <input matInput formControlName="commonName" placeholder="npr. My Root CA">
+          <mat-error>Common Name je obavezan</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Organizacija (O)</mat-label>
+          <input matInput formControlName="organization">
+          <mat-error>Organizacija je obavezna</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Organizaciona jedinica (OU)</mat-label>
+          <input matInput formControlName="organizationalUnit">
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Drzava (C)</mat-label>
+          <input matInput formControlName="country" placeholder="npr. RS" maxlength="2">
+          <mat-error *ngIf="certForm.get('country')?.hasError('required')">Drzava je obavezna</mat-error>
+          <mat-error *ngIf="certForm.get('country')?.hasError('pattern')">Tacno 2 velika slova (npr. RS)</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Pokrajina / Staat (ST)</mat-label>
+          <input matInput formControlName="state">
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Grad (L)</mat-label>
+          <input matInput formControlName="locality">
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email">
+          <mat-error>Unesite validan email</mat-error>
+        </mat-form-field>
+        <h3>Podesavanja sertifikata</h3>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Vaznost (dani)</mat-label>
+          <input matInput type="number" formControlName="validDays">
+          <mat-hint *ngIf="expiryDate">Istice: {{ expiryDate | date:'dd.MM.yyyy' }}</mat-hint>
+          <mat-error>Unesite broj izmedju 1 i 3650</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Velicina kljuca (bits)</mat-label>
+          <mat-select formControlName="keySize">
+            <mat-option [value]="2048">2048</mat-option>
+            <mat-option [value]="4096">4096</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+        <div class="button-row">
+          <button mat-raised-button color="primary" type="submit" class="full-width"
+                  [disabled]="certForm.invalid || isLoading">
+            <mat-spinner *ngIf="isLoading" diameter="20" class="inline-spinner"></mat-spinner>
+            <span *ngIf="!isLoading">Kreiraj Root sertifikat</span>
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>

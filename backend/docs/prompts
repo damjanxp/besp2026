@@ -1,0 +1,365 @@
+Let me check more files:
+Now I have a complete picture. Let me create the markdown file with the analysis and prompts.
+# KT1 — Student 1 — Preostali zadaci i Copilot promptovi
+
+## Trenutno stanje projekta
+
+### ✅ Već implementirano
+- `User` entitet, `UserRole` enum, `UserRepository`
+- `SecurityConfig` (JWT filter, CORS, stateless sesija)
+- `DataInitializer` (kreira admin korisnika pri pokretanju)
+- `JwtService` (generisanje/validacija JWT tokena, HS512)
+- `JwtAuthenticationFilter` (Bearer token filter)
+- `UserDetailsServiceImpl`
+- `ActivationToken` entitet, `TokenType` enum, `ActivationTokenRepository`
+- `RegisterRequest`, `LoginRequest`, `AuthResponse` DTO-ovi
+- `AuthService` (register, activateAccount, login)
+- `AuthController` (POST /api/auth/register, GET /api/auth/activate, POST /api/auth/login)
+- `GlobalExceptionHandler`
+- Docker Compose za PostgreSQL
+
+---
+
+## ❌ Preostalo za KT1 — Student 1
+
+Iz specifikacije (sekcija 8 — KT1 Checklist):
+
+| # | Zahtev | Status |
+|---|--------|--------|
+| 1 | Forma za registraciju (Angular) | ❌ TODO |
+| 2 | Validacija lozinke (OWASP) + zxcvbn strength meter | ❌ TODO |
+| 3 | Aktivacioni email flow (backend već postoji, Angular deo nedostaje) | ❌ TODO |
+| 4 | Login forma + JWT (backend postoji, Angular deo nedostaje) | ❌ TODO |
+| 5 | ~~Inicijalni admin (DataInitializer)~~ | ✅ DONE |
+| 6 | Root sertifikat — Bouncy Castle + PKCS12 keystore | ❌ TODO |
+
+---
+
+## Redosled implementacije
+
+
+KORAK 1 → Kreirati Angular projekat KORAK 2 → Angular auth (login, register, activate) sa validacijom i zxcvbn KORAK 3 → Root sertifikat backend (Bouncy Castle, PKCS12 keystore) KORAK 4 → Root sertifikat Angular forma
+---
+
+## PROMPT KT1-1: Kreiranje Angular projekta
+
+Kopiraj i pošalji Copilotu:
+
+
+Create a new Angular 17 project structure for a PKI system frontend. The project already exists (ng new was already run). Now scaffold the following:
+Install dependencies:
+npm install @angular/material @angular/cdk
+npm install zxcvbn @types/zxcvbn
+npm install @angular/animations
+Update app.module.ts (or app.config.ts if standalone) to import:
+HttpClientModule (with proxy for http://localhost:8080)
+BrowserAnimationsModule
+ReactiveFormsModule
+Angular Material modules: MatCardModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatProgressBarModule, MatSnackBarModule, MatIconModule, MatChipsModule, MatTableModule, MatDialogModule, MatSelectModule, MatProgressSpinnerModule
+Create proxy.conf.json in project root: { "/api": { "target": "http://localhost:8080", "secure": false, "changeOrigin": true } } Update angular.json to use this proxy under serve options.
+Create the following folder structure under src/app/:
+auth/ (login, register, activate-account components)
+certificates/ (certificate-list, certificate-form components)
+shared/ (services: auth.service.ts, certificate.service.ts, crypto.service.ts; guards: auth.guard.ts; interceptors: jwt.interceptor.ts)
+core/ (models: user.model.ts, certificate.model.ts, auth.model.ts)
+Create app-routing.module.ts with routes:
+/login → LoginComponent
+/register → RegisterComponent
+/activate → ActivateAccountComponent
+/certificates → CertificateListComponent (guarded by AuthGuard)
+'' → redirect to /login
+Create core/models/auth.model.ts: export interface LoginRequest { email: string; password: string; } export interface RegisterRequest { email: string; password: string; confirmPassword: string; firstName: string; lastName: string; organization?: string; } export interface AuthResponse { token: string; email: string; role: string; }
+Create shared/services/auth.service.ts:
+Inject HttpClient
+login(request: LoginRequest): Observable<authresponse> → POST /api/auth/login</authresponse>
+register(request: RegisterRequest): Observable<any> → POST /api/auth/register</any>
+activateAccount(token: string): Observable<any> → GET /api/auth/activate?token={token}</any>
+saveToken(token: string): store JWT in localStorage as 'auth_token'
+getToken(): string | null → read from localStorage
+getRole(): string | null → decode JWT payload (atob), return role field
+getEmail(): string | null → decode JWT payload, return email field
+isLoggedIn(): boolean → check token exists and not expired (decode exp field)
+logout(): remove token from localStorage
+Create shared/guards/auth.guard.ts using CanActivateFn that checks authService.isLoggedIn(), redirects to /login if not.
+Create shared/interceptors/jwt.interceptor.ts using HttpInterceptorFn:
+Read token from localStorage
+If exists, add header: Authorization: Bearer {token}
+Provide in app.config.ts or app.module.ts
+Package is in frontend/ directory (sibling to backend/). Backend runs on http://localhost:8080.
+---
+
+## PROMPT KT1-2: Angular Auth komponente (Login, Register, Activate)
+
+Kopiraj i pošalji Copilotu:
+
+
+Implement Angular 17 authentication components for a PKI system. Backend is Spring Boot on localhost:8080 (proxied via /api). Package: com.bsep.pki.
+Implement the following 3 components:
+=== 1. LoginComponent (src/app/auth/login/) ===
+Template (login.component.html):
+mat-card centered on page (CSS: max-width 400px, margin: auto, margin-top: 80px)
+Title: "PKI System — Prijava"
+ReactiveForm with fields:
+email (mat-form-field, mat-input, type=email)
+password (mat-form-field, mat-input, type=password, toggle visibility with mat-icon-button)
+Submit button (mat-raised-button color=primary, full width): "Prijavi se"
+Loading spinner (mat-spinner) shown during request
+Error message shown in red paragraph if login fails
+Link to /register: "Nemate nalog? Registrujte se"
+Component (login.component.ts):
+FormBuilder with Validators.required, Validators.email
+On submit: call authService.login(), on success save token and navigate to /certificates, on error show error message
+isLoading boolean flag
+=== 2. RegisterComponent (src/app/auth/register/) ===
+Template (register.component.html):
+mat-card (max-width: 500px, margin: auto, margin-top: 40px)
+Title: "Registracija"
+ReactiveForm with fields:
+email (mat-form-field, type=email, @Email validation)
+firstName (mat-form-field, required)
+lastName (mat-form-field, required)
+organization (mat-form-field, optional)
+password (mat-form-field, type=password with toggle):
+Validators: required, minLength(12)
+Custom regex validator: must contain uppercase letter, lowercase letter, digit, special character (!@#$%^&*()_+{}[]:;<>,.?/~`|-=\)
+Show individual requirement hints below field (4 colored icons: ✓ green or ✗ red): "Minimum 12 karaktera", "Veliko slovo", "Malo slovo i broj", "Specijalni karakter"
+Password strength meter:
+Use zxcvbn(passwordValue) to get score 0-4
+Show mat-progress-bar [value]="score * 25" [color]="score < 2 ? 'warn' : score < 4 ? 'accent' : 'primary'"
+Show text label: score 0='Veoma slaba', 1='Slaba', 2='Prihvatljiva', 3='Jaka', 4='Veoma jaka'
+Minimum score 3 required (custom validator that runs zxcvbn and checks score >= 3)
+confirmPassword (mat-form-field, type=password):
+Cross-field validator: passwords must match (validator on FormGroup level)
+Show error "Lozinke se ne podudaraju" if mismatch
+Submit button: disabled if form invalid OR score < 3
+On success: MatSnackBar message "Registracija uspješna! Provjerite email." + navigate to /login after 2 seconds
+On error: show backend error message in red
+Component (register.component.ts):
+passwordStrengthScore: number = 0 (updated on password valueChanges using zxcvbn)
+Custom FormGroup validator for password match
+Custom Validator function for password complexity (regex checks)
+Custom Validator function for minimum zxcvbn score (calls zxcvbn internally)
+=== 3. ActivateAccountComponent (src/app/auth/activate-account/) ===
+Template (activate-account.component.html):
+mat-card centered (max-width: 400px, margin: auto, margin-top: 100px)
+Show loading spinner while request is in progress
+On success: green checkmark icon (mat-icon: check_circle, color green), message "Nalog uspješno aktiviran!", button "Idi na prijavu" → navigates to /login
+On error: red error icon (mat-icon: error, color red), message showing the error, button "Nazad" → navigates to /login
+Component (activate-account.component.ts):
+On ngOnInit: read token from ActivatedRoute queryParams
+Call authService.activateAccount(token)
+isLoading / isSuccess / errorMessage flags
+All components must:
+Use Angular Material components
+Use ReactiveFormsModule (not template-driven)
+Have proper SCSS styles in component .scss file
+Be registered in app-routing.module.ts
+---
+
+## PROMPT KT1-3: Root sertifikat — Spring Boot backend (Bouncy Castle)
+
+Kopiraj i pošalji Copilotu:
+
+
+Implement Root (self-signed) X.509 certificate generation using Bouncy Castle in Spring Boot 3.x. Package: com.bsep.pki. Bouncy Castle version: 1.77 (bcprov-jdk18on, bcpkix-jdk18on already in pom.xml).
+=== 1. BouncyCastle configuration ===
+Create com.bsep.pki.config.BouncyCastleConfig:
+@Configuration class
+In @Bean or static initializer: Security.addProvider(new BouncyCastleProvider())
+Also create src/main/resources/keystores/ directory (add .gitkeep)
+Add to application.properties: app.keystore.dir=keystores app.keystore.master-password=change-this-in-production-min32chars
+=== 2. Certificate entity ===
+Create com.bsep.pki.model.entity.Certificate:
+@Entity @Table(name = "certificates")
+Fields:
+id (Long, @Id @GeneratedValue IDENTITY)
+serialNumber (String, @Column unique, not null)
+type (CertificateType enum: ROOT, INTERMEDIATE, END_ENTITY)
+commonName (String)
+organization (String)
+issuer (@ManyToOne @JoinColumn(name="issuer_id"), nullable=true, Certificate itself)
+owner (@ManyToOne @JoinColumn(name="owner_id"), User entity)
+validFrom (LocalDateTime)
+validTo (LocalDateTime)
+status (CertificateStatus enum: ACTIVE, REVOKED, EXPIRED)
+keystoreAlias (String)
+certificateData (TEXT — PEM encoded public cert)
+createdAt (LocalDateTime, @PrePersist)
+Create CertificateType enum at com.bsep.pki.model.entity.CertificateType
+Create CertificateStatus enum at com.bsep.pki.model.entity.CertificateStatus
+=== 3. CertificateRepository ===
+Create com.bsep.pki.repository.CertificateRepository extends JpaRepository<Certificate, Long>:
+Optional<certificate> findBySerialNumber(String serialNumber)</certificate>
+List<certificate> findByOwner(User owner)</certificate>
+List<certificate> findByType(CertificateType type)</certificate>
+List<certificate> findByStatus(CertificateStatus status)</certificate>
+=== 4. DTOs ===
+Create com.bsep.pki.model.dto.CreateRootCertificateRequest:
+commonName (String, @NotBlank)
+organization (String, @NotBlank)
+organizationalUnit (String)
+country (String, @Size(min=2, max=2))
+state (String)
+locality (String)
+email (String, @Email)
+validDays (int, @Min(1) @Max(3650)) — certificate validity in days from today
+keySize (int) — default 2048, allowed: 2048, 4096
+Create com.bsep.pki.model.dto.CertificateResponse:
+id (Long)
+serialNumber (String)
+type (String)
+commonName (String)
+organization (String)
+issuerCommonName (String — null for Root)
+ownerEmail (String)
+validFrom (LocalDateTime)
+validTo (LocalDateTime)
+status (String)
+certificateData (String — PEM)
+createdAt (LocalDateTime)
+=== 5. KeystoreService ===
+Create com.bsep.pki.pki.KeystoreService @Service:
+Method saveRootToKeystore(String alias, PrivateKey privateKey, X509Certificate certificate, String keystoreDir):
+Generate random keystore password: new SecureRandom().nextBytes(32) → Base64.getEncoder().encodeToString()
+KeyStore ks = KeyStore.getInstance("PKCS12", "BC")
+ks.load(null, null)
+ks.setKeyEntry(alias, privateKey, keystorePassword.toCharArray(), new Certificate[]{certificate})
+Create directory if not exists: Path keystorePath = Paths.get(keystoreDir, alias + ".p12")
+Save: FileOutputStream fos = new FileOutputStream(keystorePath.toFile()); ks.store(fos, keystorePassword.toCharArray())
+Return the generated keystore password (String)
+Method loadPrivateKey(String alias, String keystorePassword, String keystoreDir):
+Load PKCS12 keystore from {keystoreDir}/{alias}.p12
+Return (PrivateKey, X509Certificate) pair as a simple record or Object[]
+=== 6. CertificateService ===
+Create com.bsep.pki.service.CertificateService @Service:
+Inject: CertificateRepository, KeystoreService, @Value("${app.keystore.dir}") String keystoreDir
+Method generateRootCertificate(CreateRootCertificateRequest request, User adminUser):
+Step by step implementation: a) Generate key pair: KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC"); kpg.initialize(request.getKeySize(), new SecureRandom()); KeyPair keyPair = kpg.generateKeyPair();
+b) Build X500Name: X500Name subject = new X500NameBuilder(BCStyle.INSTANCE) .addRDN(BCStyle.CN, request.getCommonName()) .addRDN(BCStyle.O, request.getOrganization()) .addRDN(BCStyle.OU, request.getOrganizationalUnit()) // if not null .addRDN(BCStyle.C, request.getCountry()) .addRDN(BCStyle.ST, request.getState()) // if not null .addRDN(BCStyle.L, request.getLocality()) // if not null .addRDN(BCStyle.EmailAddress, request.getEmail()) // if not null .build();
+c) Serial number: BigInteger serialNumber = new BigInteger(64, new SecureRandom());
+d) Validity dates: Date notBefore = new Date(); Date notAfter = Date.from(LocalDateTime.now().plusDays(request.getValidDays()).toInstant(ZoneOffset.UTC));
+e) Build certificate: SubjectPublicKeyInfo spki = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded()); X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder( subject, serialNumber, notBefore, notAfter, subject, spki );
+f) Add extensions: JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
+certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true)); certBuilder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign | KeyUsage.cRLSign)); certBuilder.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(keyPair.getPublic())); certBuilder.addExtension(Extension.authorityKeyIdentifier, false, extUtils.createAuthorityKeyIdentifier(keyPair.getPublic()));
+g) Sign: ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption") .setProvider("BC").build(keyPair.getPrivate()); X509CertificateHolder certHolder = certBuilder.build(signer); X509Certificate certificate = new JcaX509CertificateConverter() .setProvider("BC").getCertificate(certHolder);
+h) Convert to PEM: Use StringWriter + JcaPEMWriter: StringWriter sw = new StringWriter(); try (JcaPEMWriter pw = new JcaPEMWriter(sw)) { pw.writeObject(certificate); } String pemData = sw.toString();
+i) Save to keystore: String alias = "root-" + serialNumber.toString(16).substring(0, 8); String keystorePassword = keystoreService.saveRootToKeystore(alias, keyPair.getPrivate(), certificate, keystoreDir); (Store keystorePassword somewhere — for now log it with WARN and TODO comment)
+j) Save to database: Certificate cert = new Certificate(); cert.setSerialNumber(serialNumber.toString()); cert.setType(CertificateType.ROOT); cert.setCommonName(request.getCommonName()); cert.setOrganization(request.getOrganization()); cert.setIssuer(null); // self-signed cert.setOwner(adminUser); cert.setValidFrom(LocalDateTime.now()); cert.setValidTo(LocalDateTime.now().plusDays(request.getValidDays())); cert.setStatus(CertificateStatus.ACTIVE); cert.setKeystoreAlias(alias); cert.setCertificateData(pemData); return certificateRepository.save(cert);
+k) Return CertificateResponse DTO mapped from saved entity.
+=== 7. CertificateController ===
+Create com.bsep.pki.controller.CertificateController @RestController @RequestMapping("/api/certificates"):
+POST /root — @PreAuthorize("hasRole('ADMIN')")
+@RequestBody @Valid CreateRootCertificateRequest request
+Get current admin user from SecurityContext (load by email from Authentication.getName())
+Call certificateService.generateRootCertificate(request, adminUser)
+Return ResponseEntity.ok(certificateResponse)
+GET / — @PreAuthorize("isAuthenticated()")
+Return list of all certificates (for now, filtered by role later)
+Map to List<certificateresponse></certificateresponse>
+Important: Enable @EnableMethodSecurity in SecurityConfig.
+---
+
+## PROMPT KT1-4: Root sertifikat — Angular forma
+
+Kopiraj i pošalji Copilotu:
+
+
+Implement Angular 17 component for creating Root certificates in a PKI system. Backend endpoint: POST /api/certificates/root (requires ADMIN JWT token). Only users with role ADMIN can access this.
+=== 1. CertificateService (src/app/shared/services/certificate.service.ts) ===
+Inject HttpClient
+createRootCertificate(request: CreateRootCertificateRequest): Observable<certificateresponse> → POST /api/certificates/root</certificateresponse>
+getCertificates(): Observable<CertificateResponse[]> → GET /api/certificates
+Create interfaces in src/app/core/models/certificate.model.ts: interface CreateRootCertificateRequest { commonName: string; organization: string; organizationalUnit?: string; country: string; // 2 chars state?: string; locality?: string; email?: string; validDays: number; keySize: number; // 2048 or 4096 } interface CertificateResponse { id: number; serialNumber: string; type: 'ROOT' | 'INTERMEDIATE' | 'END_ENTITY'; commonName: string; organization: string; issuerCommonName: string | null; ownerEmail: string; validFrom: string; validTo: string; status: 'ACTIVE' | 'REVOKED' | 'EXPIRED'; certificateData: string; createdAt: string; }
+=== 2. CertificateFormComponent (src/app/certificates/certificate-form/) ===
+Template (certificate-form.component.html):
+mat-card (max-width: 700px, margin: auto, padding: 24px)
+Title: "Kreiranje Root sertifikata"
+ReactiveForm with sections:
+Section "X.500 Podaci o subjektu":
+commonName: mat-form-field, required, placeholder "npr. My Root CA"
+organization: mat-form-field, required
+organizationalUnit: mat-form-field, optional
+country: mat-form-field, required, maxlength=2, placeholder "npr. RS"
+state: mat-form-field, optional
+locality: mat-form-field, optional
+email: mat-form-field, type=email, optional
+Section "Podešavanja sertifikata":
+validDays: mat-form-field, type=number, required, min=1 max=3650, hint: shows calculated expiry date (today + validDays) in real time
+keySize: mat-select with options 2048 and 4096, default 2048 label: "Veličina ključa (bits)"
+Submit button: mat-raised-button color=primary "Kreiraj Root sertifikat"
+Disabled while loading
+Show mat-spinner (diameter=20) inline when loading
+On success:
+Show MatSnackBar: "Root sertifikat uspješno kreiran!"
+Navigate to /certificates
+On error:
+Show error message below form in red
+Component (certificate-form.component.ts):
+FormBuilder with validators
+Custom validator for country: exactly 2 uppercase letters (Validators.pattern(/^[A-Z]{2}$/))
+Real-time expiry date calculation: subscribe to validDays valueChanges
+On submit: call certificateService.createRootCertificate()
+Role guard: if authService.getRole() !== 'ADMIN', navigate to /certificates
+=== 3. CertificateListComponent (src/app/certificates/certificate-list/) ===
+Template (certificate-list.component.html):
+Page title: "Upravljanje sertifikatima"
+Button "Kreiraj Root sertifikat" (visible only if role === 'ADMIN') → navigate to /certificates/new
+mat-table with columns:
+serialNumber
+type (chip: ROOT=purple, INTERMEDIATE=blue, END_ENTITY=green)
+commonName
+organization
+validFrom (date pipe: dd.MM.yyyy)
+validTo (date pipe: dd.MM.yyyy)
+status (chip: ACTIVE=green, REVOKED=red, EXPIRED=grey)
+Show loading spinner while fetching
+Show "Nema sertifikata" message if list is empty
+Component:
+On ngOnInit: call certificateService.getCertificates()
+dataSource: MatTableDataSource
+displayedColumns: ['serialNumber', 'type', 'commonName', 'organization', 'validFrom', 'validTo', 'status']
+=== 4. Update routing ===
+Add routes to app-routing.module.ts:
+/certificates → CertificateListComponent (canActivate: [AuthGuard])
+/certificates/new → CertificateFormComponent (canActivate: [AuthGuard])
+=== 5. Navigation (app.component.ts / app.component.html) ===
+Create simple navigation bar:
+mat-toolbar color=primary
+App title: "PKI System"
+If logged in: show user email (authService.getEmail()), link to /certificates, Logout button
+If not logged in: links to /login and /register
+---
+
+## Napomene
+
+### Redosled slanja promptova
+1. Prvo pošalji **KT1-1** (Angular setup)
+2. Zatim **KT1-2** (Login, Register, Activate komponente)
+3. Zatim **KT1-3** (Root sertifikat backend)
+4. Na kraju **KT1-4** (Root sertifikat Angular forma)
+
+### Stvari koje su zavisne od Student 2 (ostavi za posle)
+- Čuvanje keystore lozinke enkriptovano u bazi (`keystorePasswordEncrypted` kolona) — to je **F2.6 Student 2**
+- Za sada u `CertificateService.generateRootCertificate()` samo loguj keystore lozinku sa `log.warn("TODO: store keystore password securely - {}", keystorePassword)` i čuvaj je privremeno
+- Intermediate i End-Entity sertifikati su za **finalnu odbranu**
+
+### Backend je spreman za testiranje
+Endpointi koji već rade:
+- `POST /api/auth/register`
+- `GET /api/auth/activate?token=`
+- `POST /api/auth/login`
+
+Pokreni backend sa `docker compose up -d` (PostgreSQL) pa `mvn spring-boot:run`.
+The file docs/kt1-student1-todo.md has been created with complete analysis and 4 detailed prompts.
+Summary of what's left for KT1:
+What
+How
+Angular project setup
+Send KT1-1 prompt
+Login + Register + Activate forms
+Send KT1-2 prompt
+Root certificate backend (Bouncy Castle)
+Send KT1-3 prompt
+Root certificate Angular form
+Send KT1-4 prompt
+The backend (register/login/activate) is already complete — you only need Angular frontend and Root certificate generation.

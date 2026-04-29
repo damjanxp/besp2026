@@ -1,0 +1,46 @@
+﻿.list-container {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  h2 {
+    margin: 0;
+  }
+}
+.full-width {
+  width: 100%;
+}
+.center-spinner {
+  display: block;
+  margin: 60px auto;
+}
+.empty-message {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    display: block;
+    margin: 0 auto 8px;
+  }
+}
+.chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+table {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
