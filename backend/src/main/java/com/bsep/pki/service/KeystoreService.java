@@ -8,53 +8,51 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.*;
+import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.util.Base64;
 
 @Service
 @Slf4j
 public class KeystoreService {
 
-    public String saveRootToKeystore(String alias, PrivateKey privateKey, X509Certificate certificate, String keystoreDir) {
+    public void saveToKeystore(String alias,
+                               PrivateKey privateKey,
+                               X509Certificate certificate,
+                               java.security.cert.Certificate[] chain,
+                               String keystorePassword,
+                               String keystorePath) {
         try {
-            // Generate random keystore password
-            byte[] randomBytes = new byte[32];
-            new SecureRandom().nextBytes(randomBytes);
-            String keystorePassword = Base64.getEncoder().encodeToString(randomBytes);
-
-            // Create PKCS12 keystore
-            KeyStore ks = KeyStore.getInstance("PKCS12", "BC");
+            KeyStore ks = KeyStore.getInstance("PKCS12");
             ks.load(null, null);
-            ks.setKeyEntry(alias, privateKey, keystorePassword.toCharArray(),
-                    new java.security.cert.Certificate[]{certificate});
 
-            // Create directory if not exists
-            Path dirPath = Paths.get(keystoreDir);
-            if (!Files.exists(dirPath)) {
-                Files.createDirectories(dirPath);
+            java.security.cert.Certificate[] effectiveChain = chain != null && chain.length > 0
+                    ? chain
+                    : new java.security.cert.Certificate[]{certificate};
+            ks.setKeyEntry(alias, privateKey, keystorePassword.toCharArray(), effectiveChain);
+
+            Path filePath = Paths.get(keystorePath);
+            Path parentDir = filePath.getParent();
+            if (parentDir != null && !Files.exists(parentDir)) {
+                Files.createDirectories(parentDir);
             }
 
-            // Save keystore to file
-            Path keystorePath = Paths.get(keystoreDir, alias + ".p12");
-            try (FileOutputStream fos = new FileOutputStream(keystorePath.toFile())) {
+            try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                 ks.store(fos, keystorePassword.toCharArray());
             }
 
-            log.info("Keystore saved to: {}", keystorePath.toAbsolutePath());
-            return keystorePassword;
-
+            log.info("Keystore saved to: {}", filePath.toAbsolutePath());
         } catch (Exception e) {
             throw new RuntimeException("Failed to save keystore: " + e.getMessage(), e);
         }
     }
 
-    public KeystoreEntry loadPrivateKey(String alias, String keystorePassword, String keystoreDir) {
+    public KeystoreEntry loadFromKeystore(String alias, String keystorePassword, String keystorePath) {
         try {
-            Path keystorePath = Paths.get(keystoreDir, alias + ".p12");
-            KeyStore ks = KeyStore.getInstance("PKCS12", "BC");
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            Path filePath = Paths.get(keystorePath);
 
-            try (FileInputStream fis = new FileInputStream(keystorePath.toFile())) {
+            try (FileInputStream fis = new FileInputStream(filePath.toFile())) {
                 ks.load(fis, keystorePassword.toCharArray());
             }
 
@@ -62,7 +60,6 @@ public class KeystoreService {
             X509Certificate certificate = (X509Certificate) ks.getCertificate(alias);
 
             return new KeystoreEntry(privateKey, certificate);
-
         } catch (Exception e) {
             throw new RuntimeException("Failed to load keystore: " + e.getMessage(), e);
         }
@@ -70,4 +67,3 @@ public class KeystoreService {
 
     public record KeystoreEntry(PrivateKey privateKey, X509Certificate certificate) {}
 }
-

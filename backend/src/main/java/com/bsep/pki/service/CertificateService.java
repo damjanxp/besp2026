@@ -46,6 +46,7 @@ public class CertificateService {
 
     private final CertificateRepository certificateRepository;
     private final KeystoreService keystoreService;
+    private final KeyEncryptionService keyEncryptionService;
 
     @Value("${app.keystore.dir}")
     private String keystoreDir;
@@ -127,11 +128,18 @@ public class CertificateService {
 
             // i) Save to keystore
             String alias = "root-" + serialNumber.toString(16).substring(0, 8);
-            String keystorePassword = keystoreService.saveRootToKeystore(
-                    alias, keyPair.getPrivate(), certificate, keystoreDir
+            String keystorePassword = generateKeystorePassword();
+            String keystorePath = resolveKeystorePath(adminUser.getId(), alias);
+            keystoreService.saveToKeystore(
+                    alias, keyPair.getPrivate(), certificate, new java.security.cert.Certificate[]{certificate},
+                    keystorePassword, keystorePath
             );
-            // TODO: store keystore password securely (Student 2 — F2.6)
-            log.warn("TODO: store keystore password securely - alias: {}", alias);
+
+            String encryptedKeystorePassword = keyEncryptionService.encryptPassword(
+                    keystorePassword,
+                    keyEncryptionService.generateUserEncryptionKey(adminUser.getId())
+            );
+            adminUser.setKeystorePasswordEncrypted(encryptedKeystorePassword);
 
             // j) Save to database
             Certificate cert = Certificate.builder()
@@ -158,6 +166,16 @@ public class CertificateService {
         }
     }
 
+    private String resolveKeystorePath(Long userId, String alias) {
+        return java.nio.file.Paths.get(keystoreDir, String.valueOf(userId), alias + ".p12").toString();
+    }
+
+    private String generateKeystorePassword() {
+        byte[] randomBytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(randomBytes);
+        return java.util.Base64.getEncoder().encodeToString(randomBytes);
+    }
+
     public List<CertificateResponse> getAllCertificates() {
         return certificateRepository.findAll().stream()
                 .map(this::mapToResponse)
@@ -181,4 +199,3 @@ public class CertificateService {
                 .build();
     }
 }
-

@@ -49,6 +49,9 @@ public class User {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String keystorePasswordEncrypted;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -60,4 +63,3 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 }
-
