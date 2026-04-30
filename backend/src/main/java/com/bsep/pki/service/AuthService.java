@@ -107,11 +107,13 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isActive()) {
-            throw new RuntimeException("Account not activated");
+            log.warn("Login attempt on inactive account: {}", request.getEmail());
+            throw new RuntimeException("Invalid credentials");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid password");
+            log.warn("Failed login attempt for: {}", request.getEmail());
+            throw new RuntimeException("Invalid credentials");
         }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
