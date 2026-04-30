@@ -46,7 +46,9 @@ public class AuthService {
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email is already taken");
+            // Generic message — ne otkrivamo da email vec postoji (OWASP)
+            log.warn("Registration attempt with existing email: {}", request.getEmail());
+            return;
         }
 
         User user = User.builder()

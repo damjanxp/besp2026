@@ -1,5 +1,6 @@
 package com.bsep.pki.model.dto;
 
+import com.bsep.pki.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -12,6 +13,7 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank
+    @ValidPassword
     private String password;
 
     @NotBlank
