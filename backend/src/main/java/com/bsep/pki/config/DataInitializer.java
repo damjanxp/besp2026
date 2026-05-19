@@ -35,6 +35,23 @@ public class DataInitializer implements ApplicationRunner {
         } else {
             log.info("Admin user already exists, skipping initialization.");
         }
+
+        if (userRepository.findByEmail("user@pki.com").isEmpty()) {
+            User endEntity = User.builder()
+                    .email("user@pki.com")
+                    .password(passwordEncoder.encode("User1234!"))
+                    .firstName("Test")
+                    .lastName("Korisnik")
+                    .organization("Test Org")
+                    .role(UserRole.END_ENTITY)
+                    .isActive(true)
+                    .build();
+
+            userRepository.save(endEntity);
+            log.info("Default end entity user created: user@pki.com");
+        } else {
+            log.info("End entity user already exists, skipping initialization.");
+        }
     }
 }
 
