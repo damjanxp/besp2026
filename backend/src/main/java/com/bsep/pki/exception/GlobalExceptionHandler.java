@@ -1,5 +1,7 @@
 package com.bsep.pki.exception;
 
+import com.bsep.pki.exception.CaptchaException;
+import com.bsep.pki.exception.CsrException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -11,6 +13,20 @@ import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(CsrException.class)
+    public ResponseEntity<Map<String, String>> handleCsrException(CsrException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(CaptchaException.class)
+    public ResponseEntity<Map<String, String>> handleCaptchaException(CaptchaException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", ex.getMessage()));
+    }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {

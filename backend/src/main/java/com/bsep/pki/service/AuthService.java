@@ -1,5 +1,6 @@
 package com.bsep.pki.service;
 
+import com.bsep.pki.exception.CaptchaException;
 import com.bsep.pki.model.dto.AuthResponse;
 import com.bsep.pki.model.dto.LoginRequest;
 import com.bsep.pki.model.dto.RegisterRequest;
@@ -35,6 +36,7 @@ public class AuthService {
     private final JavaMailSender mailSender;
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
+    private final CaptchaService captchaService;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -103,12 +105,14 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        captchaService.verifyRecaptcha(request.getCaptchaToken());
+
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isActive()) {
             log.warn("Login attempt on inactive account: {}", request.getEmail());
-            throw new RuntimeException("Invalid credentials");
+            throw new RuntimeException("Nalog nije aktiviran. Molimo proverite vaš email i kliknite na aktivacioni link.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {

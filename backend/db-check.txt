@@ -1,0 +1,12 @@
+     datname      
+------------------
+ postgres
+ template1
+ template0
+ explorer-v1
+ explorer-v1-test
+ jutjubic
+ tourapp_db
+ pki_db
+(8 rows)
+

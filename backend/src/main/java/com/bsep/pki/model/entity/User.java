@@ -52,6 +52,15 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String keystorePasswordEncrypted;
 
+
+    /**
+     * RSA public key in SPKI PEM format, uploaded by the user.
+     * Used for encrypting password entries (Web Crypto RSA-OAEP).
+     * Private key NEVER stored on server — stays in user's browser/device.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String publicKeySpki;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

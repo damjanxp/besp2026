@@ -20,6 +20,12 @@
           <mat-error *ngIf="loginForm.get('password')?.hasError('required')">Lozinka je obavezna</mat-error>
         </mat-form-field>
         <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+        <div class="recaptcha-container">
+          <re-captcha #captchaRef formControlName="captchaToken" [siteKey]="siteKey"></re-captcha>
+          <mat-error *ngIf="loginForm.get('captchaToken')?.invalid && loginForm.get('captchaToken')?.touched">
+            Molimo potvrdite da niste robot
+          </mat-error>
+        </div>
         <div class="button-row">
           <button mat-raised-button color="primary" type="submit" class="full-width"
                   [disabled]="loginForm.invalid || isLoading">

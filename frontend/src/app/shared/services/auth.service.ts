@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@angular/core';
+﻿﻿import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { LoginRequest, RegisterRequest, AuthResponse } from '../../core/models/auth.model';
@@ -9,8 +9,8 @@ export class AuthService {
   private readonly API_URL = '/api/auth';
   private readonly TOKEN_KEY = 'auth_token';
   constructor(private http: HttpClient) {}
-  login(request: LoginRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(this.API_URL + '/login', request);
+  login(email: string, password: string, captchaToken: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(this.API_URL + '/login', { email, password, captchaToken });
   }
   register(request: RegisterRequest): Observable<any> {
     return this.http.post(this.API_URL + '/register', request);

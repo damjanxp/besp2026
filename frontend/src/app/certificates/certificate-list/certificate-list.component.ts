@@ -10,10 +10,11 @@ import { CertificateResponse } from '../../core/models/certificate.model';
   styleUrls: ['./certificate-list.component.scss']
 })
 export class CertificateListComponent implements OnInit {
-  displayedColumns = ['serialNumber', 'type', 'commonName', 'organization', 'validFrom', 'validTo', 'status'];
+  displayedColumns = ['serialNumber', 'type', 'commonName', 'organization', 'validFrom', 'validTo', 'status', 'actions'];
   dataSource = new MatTableDataSource<CertificateResponse>();
   isLoading = true;
   isAdmin = false;
+  selectedCert: CertificateResponse | null = null;
   constructor(
     private certificateService: CertificateService,
     private authService: AuthService,
@@ -49,5 +50,17 @@ export class CertificateListComponent implements OnInit {
       case 'EXPIRED': return 'grey';
       default: return '';
     }
+  }
+  showDetails(cert: CertificateResponse): void {
+    this.selectedCert = this.selectedCert?.id === cert.id ? null : cert;
+  }
+  downloadPem(cert: CertificateResponse): void {
+    const blob = new Blob([cert.certificateData], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cert.commonName.replace(/\s+/g, '_')}_${cert.type}.pem`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

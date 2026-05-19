@@ -1,6 +1,7 @@
-﻿export interface LoginRequest {
+﻿﻿export interface LoginRequest {
   email: string;
   password: string;
+  captchaToken: string;
 }
 export interface RegisterRequest {
   email: string;

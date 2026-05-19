@@ -1,4 +1,4 @@
-﻿.list-container {
+﻿﻿.list-container {
   max-width: 1100px;
   margin: 24px auto;
   padding: 0 16px;
@@ -43,4 +43,55 @@
 table {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
+}
+.details-card {
+  margin-top: 20px;
+  border-left: 4px solid #7b1fa2;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+  margin-bottom: 20px;
+}
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-label {
+  font-weight: 600;
+  color: #555;
+  min-width: 160px;
+  font-size: 13px;
+}
+.detail-value {
+  font-size: 14px;
+}
+.mono {
+  font-family: monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.pem-section {
+  margin-top: 16px;
+}
+.pem-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pem-data {
+  background: #1e1e1e;
+  color: #4caf50;
+  padding: 16px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: monospace;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 250px;
+  overflow-y: auto;
 }

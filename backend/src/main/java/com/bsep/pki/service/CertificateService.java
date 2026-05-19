@@ -47,6 +47,7 @@ public class CertificateService {
     private final CertificateRepository certificateRepository;
     private final KeystoreService keystoreService;
     private final KeyEncryptionService keyEncryptionService;
+    private final com.bsep.pki.repository.UserRepository userRepository;
 
     @Value("${app.keystore.dir}")
     private String keystoreDir;
@@ -140,6 +141,7 @@ public class CertificateService {
                     keyEncryptionService.generateUserEncryptionKey(adminUser.getId())
             );
             adminUser.setKeystorePasswordEncrypted(encryptedKeystorePassword);
+            userRepository.save(adminUser);
 
             // j) Save to database
             Certificate cert = Certificate.builder()

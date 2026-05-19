@@ -1,0 +1,124 @@
+<div class="csr-upload-container">
+  <h2>CSR Zahtjev za potpisivanje</h2>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" [class.drag-over]="isDragOver" (click)="fileInput.click()">
+    <mat-icon class="upload-icon">upload_file</mat-icon>
+    <p>Prevucite .pem ili .csr fajl ovdje, ili kliknite da odaberete</p>
+    <button mat-stroked-button color="primary" type="button" (click)="$event.stopPropagation(); fileInput.click()">
+      Odaberite fajl
+    </button>
+    <input #fileInput type="file" accept=".pem,.csr" hidden (change)="onFileSelected($event)">
+  </div>
+
+  <p class="selected-file" *ngIf="selectedFile">
+    <mat-icon>description</mat-icon> {{ selectedFile.name }}
+  </p>
+
+  <!-- Loading -->
+  <div class="spinner-container" *ngIf="isLoading">
+    <mat-progress-spinner mode="indeterminate" diameter="48"></mat-progress-spinner>
+    <p>Parsiranje CSR fajla...</p>
+  </div>
+
+  <!-- Error -->
+  <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <!-- CSR Preview Card -->
+  <mat-card class="preview-card" *ngIf="csrInfo && !isLoading">
+    <mat-card-header>
+      <mat-card-title>Pregled CSR-a</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="label">Common Name:</span>
+          <span class="value">{{ csrInfo.commonName || '—' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Organizacija:</span>
+          <span class="value">{{ csrInfo.organization || '—' }}</span>
+        </div>
+        <div class="info-row" *ngIf="csrInfo.organizationalUnit">
+          <span class="label">Organizaciona jedinica:</span>
+          <span class="value">{{ csrInfo.organizationalUnit }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Država:</span>
+          <span class="value">{{ csrInfo.country || '—' }}</span>
+        </div>
+        <div class="info-row" *ngIf="csrInfo.state">
+          <span class="label">Pokrajina/Oblast:</span>
+          <span class="value">{{ csrInfo.state }}</span>
+        </div>
+        <div class="info-row" *ngIf="csrInfo.locality">
+          <span class="label">Grad:</span>
+          <span class="value">{{ csrInfo.locality }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Javni ključ:</span>
+          <span class="value">{{ csrInfo.publicKeyAlgorithm }} {{ csrInfo.publicKeySize }} bit</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Algoritam potpisa:</span>
+          <span class="value">{{ csrInfo.signatureAlgorithm }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Potpis validan:</span>
+          <span class="value signature-valid">
+            <mat-icon *ngIf="csrInfo.isSignatureValid" class="valid-icon">check_circle</mat-icon>
+            <mat-icon *ngIf="!csrInfo.isSignatureValid" class="invalid-icon">cancel</mat-icon>
+            {{ csrInfo.isSignatureValid ? 'Da' : 'Ne' }}
+          </span>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Upload Form (shown after preview) -->
+  <mat-card class="upload-form-card" *ngIf="csrInfo && !isLoading">
+    <mat-card-header>
+      <mat-card-title>Pošalji zahtjev za potpisivanje</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="uploadForm" (ngSubmit)="onSubmit()">
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>CA za potpisivanje</mat-label>
+          <mat-select formControlName="caId">
+            <mat-option *ngFor="let ca of caList" [value]="ca.id">
+              {{ ca.commonName }} ({{ ca.type }}) — ističe {{ ca.validTo | date:'dd.MM.yyyy' }}
+            </mat-option>
+          </mat-select>
+          <mat-error *ngIf="uploadForm.get('caId')?.hasError('required')">
+            Izaberite CA sertifikat
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Trajanje (dani)</mat-label>
+          <input matInput type="number" formControlName="validDays" min="1" max="3650">
+          <mat-hint *ngIf="getSelectedCa()">{{ getMaxDaysHint() }}</mat-hint>
+          <mat-error *ngIf="uploadForm.get('validDays')?.hasError('required')">
+            Unesite trajanje
+          </mat-error>
+          <mat-error *ngIf="uploadForm.get('validDays')?.hasError('min')">
+            Minimum je 1 dan
+          </mat-error>
+          <mat-error *ngIf="uploadForm.get('validDays')?.hasError('max')">
+            Maksimum je 3650 dana
+          </mat-error>
+        </mat-form-field>
+
+        <div class="button-row">
+          <button mat-raised-button color="primary" type="submit"
+                  [disabled]="uploadForm.invalid || isLoading">
+            <mat-icon>send</mat-icon>
+            Pošalji zahtjev
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>
+

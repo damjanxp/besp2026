@@ -1,4 +1,4 @@
-﻿import { NgModule } from '@angular/core';
+﻿﻿import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { CommonModule } from '@angular/common';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -17,6 +17,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { LoginComponent } from './auth/login/login.component';
@@ -24,7 +25,11 @@ import { RegisterComponent } from './auth/register/register.component';
 import { ActivateAccountComponent } from './auth/activate-account/activate-account.component';
 import { CertificateListComponent } from './certificates/certificate-list/certificate-list.component';
 import { CertificateFormComponent } from './certificates/certificate-form/certificate-form.component';
+import { PasswordListComponent } from './password-manager/password-list/password-list.component';
 import { JwtInterceptor } from './shared/interceptors/jwt.interceptor';
+import { RecaptchaModule, RecaptchaFormsModule } from 'ng-recaptcha';
+import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
+
 @NgModule({
   declarations: [
     AppComponent,
@@ -32,7 +37,9 @@ import { JwtInterceptor } from './shared/interceptors/jwt.interceptor';
     RegisterComponent,
     ActivateAccountComponent,
     CertificateListComponent,
-    CertificateFormComponent
+    CertificateFormComponent,
+    PasswordListComponent,
+    CsrUploadComponent
   ],
   imports: [
     BrowserModule,
@@ -53,7 +60,10 @@ import { JwtInterceptor } from './shared/interceptors/jwt.interceptor';
     MatDialogModule,
     MatSelectModule,
     MatProgressSpinnerModule,
-    MatToolbarModule
+    MatToolbarModule,
+    MatTooltipModule,
+    RecaptchaModule,
+    RecaptchaFormsModule
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true }
