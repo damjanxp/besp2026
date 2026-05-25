@@ -31,67 +31,36 @@
     margin: 0 auto 8px;
   }
 }
-.chip {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 12px;
-  color: white;
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-}
 table {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
 }
-.details-card {
-  margin-top: 20px;
-  border-left: 4px solid #7b1fa2;
-}
-.details-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 24px;
-  margin-bottom: 20px;
-}
-.detail-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.detail-label {
+mat-chip {
+  color: #fff;
+  text-transform: uppercase;
   font-weight: 600;
-  color: #555;
-  min-width: 160px;
-  font-size: 13px;
 }
-.detail-value {
-  font-size: 14px;
+.type-root {
+  background-color: #7b1fa2;
 }
-.mono {
-  font-family: monospace;
-  font-size: 12px;
-  word-break: break-all;
+.type-intermediate {
+  background-color: #1976d2;
 }
-.pem-section {
-  margin-top: 16px;
+.type-end-entity {
+  background-color: #2e7d32;
 }
-.pem-header {
+.status-active {
+  background-color: #2e7d32;
+}
+.status-revoked {
+  background-color: #c62828;
+}
+.status-expired {
+  background-color: #757575;
+}
+.actions-cell {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-.pem-data {
-  background: #1e1e1e;
-  color: #4caf50;
-  padding: 16px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-family: monospace;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 250px;
-  overflow-y: auto;
-}
+

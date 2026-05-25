@@ -1,66 +1,117 @@
-﻿import { Component, OnInit } from '@angular/core';
+﻿import { Component, OnInit, AfterViewInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatTableDataSource } from '@angular/material/table';
+import { MatPaginator } from '@angular/material/paginator';
+import { MatSort } from '@angular/material/sort';
+import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CertificateService } from '../../shared/services/certificate.service';
 import { AuthService } from '../../shared/services/auth.service';
-import { CertificateResponse } from '../../core/models/certificate.model';
+import { Certificate } from '../../core/models/certificate.model';
+import { CertificateDetailDialogComponent } from '../certificate-detail-dialog/certificate-detail-dialog.component';
+
 @Component({
   selector: 'app-certificate-list',
   templateUrl: './certificate-list.component.html',
   styleUrls: ['./certificate-list.component.scss']
 })
-export class CertificateListComponent implements OnInit {
-  displayedColumns = ['serialNumber', 'type', 'commonName', 'organization', 'validFrom', 'validTo', 'status', 'actions'];
-  dataSource = new MatTableDataSource<CertificateResponse>();
+export class CertificateListComponent implements OnInit, AfterViewInit {
+  displayedColumns = ['serialNumber', 'type', 'commonName', 'validFrom', 'validTo', 'status', 'actions'];
+  dataSource = new MatTableDataSource<Certificate>();
   isLoading = true;
   isAdmin = false;
-  selectedCert: CertificateResponse | null = null;
+
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @ViewChild(MatSort) sort!: MatSort;
+
   constructor(
     private certificateService: CertificateService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
   ) {}
+
   ngOnInit(): void {
     this.isAdmin = this.authService.getRole() === 'ADMIN';
-    this.certificateService.getCertificates().subscribe({
+    this.certificateService.getAll().subscribe({
       next: (certs) => {
         this.dataSource.data = certs;
         this.isLoading = false;
+        this.applyTableState();
       },
       error: () => {
         this.isLoading = false;
       }
     });
   }
+
+  ngAfterViewInit(): void {
+    this.applyTableState();
+  }
+
   goToCreate(): void {
     this.router.navigate(['/certificates/new']);
   }
+
+  formatSerial(serialNumber: string): string {
+    if (!serialNumber) {
+      return '';
+    }
+    return serialNumber.length > 12 ? `${serialNumber.slice(0, 12)}...` : serialNumber;
+  }
+
   getTypeColor(type: string): string {
     switch (type) {
-      case 'ROOT': return 'purple';
-      case 'INTERMEDIATE': return 'blue';
-      case 'END_ENTITY': return 'green';
-      default: return '';
+      case 'ROOT':
+        return 'type-root';
+      case 'INTERMEDIATE':
+        return 'type-intermediate';
+      case 'END_ENTITY':
+        return 'type-end-entity';
+      default:
+        return '';
     }
   }
+
   getStatusColor(status: string): string {
     switch (status) {
-      case 'ACTIVE': return 'green';
-      case 'REVOKED': return 'red';
-      case 'EXPIRED': return 'grey';
-      default: return '';
+      case 'ACTIVE':
+        return 'status-active';
+      case 'REVOKED':
+        return 'status-revoked';
+      case 'EXPIRED':
+        return 'status-expired';
+      default:
+        return '';
     }
   }
-  showDetails(cert: CertificateResponse): void {
-    this.selectedCert = this.selectedCert?.id === cert.id ? null : cert;
+
+  openDetails(cert: Certificate): void {
+    this.dialog.open(CertificateDetailDialogComponent, {
+      width: '720px',
+      data: { certificateId: cert.id }
+    });
   }
-  downloadPem(cert: CertificateResponse): void {
-    const blob = new Blob([cert.certificateData], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${cert.commonName.replace(/\s+/g, '_')}_${cert.type}.pem`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+  downloadCertificate(cert: Certificate, format: 'PEM' | 'DER'): void {
+    this.certificateService.downloadCertificate(cert.id, format).subscribe({
+      error: () => {
+        this.snackBar.open('Greska pri preuzimanju sertifikata.', 'OK', { duration: 3000 });
+      }
+    });
+  }
+
+  revokeCertificate(cert: Certificate): void {
+    this.snackBar.open('Povlacenje sertifikata nije implementirano.', 'OK', { duration: 3000 });
+  }
+
+  private applyTableState(): void {
+    if (this.dataSource && this.paginator) {
+      this.dataSource.paginator = this.paginator;
+    }
+    if (this.dataSource && this.sort) {
+      this.dataSource.sort = this.sort;
+    }
   }
 }

@@ -72,8 +72,34 @@
 }
 
 .preview-card,
-.upload-form-card {
+.upload-form-card,
+.success-card {
   margin-top: 24px;
+}
+
+.success-card {
+  border-left: 4px solid #4caf50;
+
+  mat-card-header {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .success-icon {
+    color: #4caf50;
+    margin-right: 8px;
+  }
+}
+
+.status-active {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .info-grid {
@@ -129,4 +155,3 @@
     gap: 6px;
   }
 }
-

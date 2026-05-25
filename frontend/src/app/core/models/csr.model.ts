@@ -13,3 +13,16 @@ export interface CsrInfo {
   rawPem?: string;
 }
 
+export interface CsrSignResponse {
+  id: number;
+  serialNumber: string;
+  commonName: string;
+  organization: string;
+  type: string;
+  validFrom: string;
+  validTo: string;
+  status: string;
+  issuerCommonName: string;
+  certificateData: string;
+  message: string;
+}

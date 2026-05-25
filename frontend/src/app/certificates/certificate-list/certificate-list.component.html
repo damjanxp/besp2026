@@ -10,119 +10,54 @@
     <mat-icon>description</mat-icon>
     <p>Nema sertifikata</p>
   </div>
-  <table mat-table [dataSource]="dataSource" class="full-width" *ngIf="!isLoading && dataSource.data.length > 0">
+  <table mat-table [dataSource]="dataSource" matSort class="full-width" *ngIf="!isLoading && dataSource.data.length > 0">
     <ng-container matColumnDef="serialNumber">
-      <th mat-header-cell *matHeaderCellDef>Serijski broj</th>
-      <td mat-cell *matCellDef="let cert">{{ cert.serialNumber | slice:0:16 }}...</td>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Serijski broj</th>
+      <td mat-cell *matCellDef="let cert">{{ formatSerial(cert.serialNumber) }}</td>
     </ng-container>
     <ng-container matColumnDef="type">
-      <th mat-header-cell *matHeaderCellDef>Tip</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Tip</th>
       <td mat-cell *matCellDef="let cert">
-        <span class="chip" [style.background-color]="getTypeColor(cert.type)">{{ cert.type }}</span>
+        <mat-chip-set>
+          <mat-chip [ngClass]="getTypeColor(cert.type)">{{ cert.type }}</mat-chip>
+        </mat-chip-set>
       </td>
     </ng-container>
     <ng-container matColumnDef="commonName">
-      <th mat-header-cell *matHeaderCellDef>Common Name</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Common Name</th>
       <td mat-cell *matCellDef="let cert">{{ cert.commonName }}</td>
     </ng-container>
-    <ng-container matColumnDef="organization">
-      <th mat-header-cell *matHeaderCellDef>Organizacija</th>
-      <td mat-cell *matCellDef="let cert">{{ cert.organization }}</td>
-    </ng-container>
     <ng-container matColumnDef="validFrom">
-      <th mat-header-cell *matHeaderCellDef>Važi od</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Važi od</th>
       <td mat-cell *matCellDef="let cert">{{ cert.validFrom | date:'dd.MM.yyyy' }}</td>
     </ng-container>
     <ng-container matColumnDef="validTo">
-      <th mat-header-cell *matHeaderCellDef>Važi do</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Važi do</th>
       <td mat-cell *matCellDef="let cert">{{ cert.validTo | date:'dd.MM.yyyy' }}</td>
     </ng-container>
     <ng-container matColumnDef="status">
-      <th mat-header-cell *matHeaderCellDef>Status</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
       <td mat-cell *matCellDef="let cert">
-        <span class="chip" [style.background-color]="getStatusColor(cert.status)">{{ cert.status }}</span>
+        <mat-chip-set>
+          <mat-chip [ngClass]="getStatusColor(cert.status)">{{ cert.status }}</mat-chip>
+        </mat-chip-set>
       </td>
     </ng-container>
     <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef></th>
-      <td mat-cell *matCellDef="let cert">
-        <button mat-icon-button (click)="showDetails(cert)" matTooltip="Detalji">
-          <mat-icon>{{ selectedCert?.id === cert.id ? 'expand_less' : 'info_outline' }}</mat-icon>
-        </button>
-        <button mat-icon-button (click)="downloadPem(cert)" matTooltip="Preuzmi PEM">
-          <mat-icon>download</mat-icon>
-        </button>
+      <th mat-header-cell *matHeaderCellDef>Akcije</th>
+      <td mat-cell *matCellDef="let cert" class="actions-cell">
+        <button mat-button color="primary" (click)="openDetails(cert)">Detalji</button>
+        <button mat-button (click)="downloadCertificate(cert, 'PEM')">Preuzmi</button>
+        <button mat-button color="warn" *ngIf="cert.status === 'ACTIVE'" (click)="revokeCertificate(cert)">Povuci</button>
       </td>
     </ng-container>
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
     <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
   </table>
-
-  <!-- DETALJI SERTIFIKATA -->
-  <mat-card *ngIf="selectedCert" class="details-card">
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>verified</mat-icon>
-        {{ selectedCert.commonName }} — Detalji sertifikata
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="details-grid">
-        <div class="detail-row">
-          <span class="detail-label">Tip:</span>
-          <span class="chip" [style.background-color]="getTypeColor(selectedCert.type)">{{ selectedCert.type }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status:</span>
-          <span class="chip" [style.background-color]="getStatusColor(selectedCert.status)">{{ selectedCert.status }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Serijski broj:</span>
-          <span class="detail-value mono">{{ selectedCert.serialNumber }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Common Name (CN):</span>
-          <span class="detail-value">{{ selectedCert.commonName }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Organizacija (O):</span>
-          <span class="detail-value">{{ selectedCert.organization }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Izdavač:</span>
-          <span class="detail-value">{{ selectedCert.issuerCommonName ?? selectedCert.commonName + ' (self-signed)' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Vlasnik:</span>
-          <span class="detail-value">{{ selectedCert.ownerEmail }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Važi od:</span>
-          <span class="detail-value">{{ selectedCert.validFrom | date:'dd.MM.yyyy HH:mm' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Važi do:</span>
-          <span class="detail-value">{{ selectedCert.validTo | date:'dd.MM.yyyy HH:mm' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Kreiran:</span>
-          <span class="detail-value">{{ selectedCert.createdAt | date:'dd.MM.yyyy HH:mm' }}</span>
-        </div>
-      </div>
-
-      <div class="pem-section">
-        <div class="pem-header">
-          <span><strong>PEM sertifikat (X.509)</strong></span>
-          <button mat-stroked-button (click)="downloadPem(selectedCert)">
-            <mat-icon>download</mat-icon> Preuzmi .pem
-          </button>
-        </div>
-        <pre class="pem-data">{{ selectedCert.certificateData }}</pre>
-        <small style="color: #888">
-          💡 Ovaj PEM možeš pregledati sa: <code>openssl x509 -in cert.pem -text -noout</code>
-        </small>
-      </div>
-    </mat-card-content>
-  </mat-card>
+  <mat-paginator
+    *ngIf="!isLoading && dataSource.data.length > 0"
+    [pageSizeOptions]="[10, 20, 50]"
+    [pageSize]="20"
+    showFirstLastButtons>
+  </mat-paginator>
 </div>
-

@@ -11,17 +11,18 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CertificateResponse {
+public class CsrSignResponse {
 
     private Long id;
     private String serialNumber;
-    private String type;
     private String commonName;
     private String organization;
-    private String country;
+    private String type;
     private LocalDateTime validFrom;
     private LocalDateTime validTo;
     private String status;
     private String issuerCommonName;
-    private String keyAlgorithm;
+    private String certificateData; // PEM format for download
+    private String message;
 }
+

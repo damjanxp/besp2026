@@ -76,7 +76,7 @@
   </mat-card>
 
   <!-- Upload Form (shown after preview) -->
-  <mat-card class="upload-form-card" *ngIf="csrInfo && !isLoading">
+  <mat-card class="upload-form-card" *ngIf="csrInfo && !isLoading && !signedCert">
     <mat-card-header>
       <mat-card-title>Pošalji zahtjev za potpisivanje</mat-card-title>
     </mat-card-header>
@@ -120,5 +120,61 @@
       </form>
     </mat-card-content>
   </mat-card>
-</div>
+
+  <!-- Success Card - Signed Certificate -->
+  <mat-card class="success-card" *ngIf="signedCert && !isLoading">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon class="success-icon">check_circle</mat-icon>
+        Sertifikat uspješno potpisano
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="label">Redni broj:</span>
+          <span class="value">{{ signedCert.serialNumber }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Nama (CN):</span>
+          <span class="value">{{ signedCert.commonName }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Organizacija:</span>
+          <span class="value">{{ signedCert.organization }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Tip:</span>
+          <span class="value">{{ signedCert.type }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Izdavač:</span>
+          <span class="value">{{ signedCert.issuerCommonName }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Vrijedi od:</span>
+          <span class="value">{{ signedCert.validFrom | date:'dd.MM.yyyy HH:mm' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Vrijedi do:</span>
+          <span class="value">{{ signedCert.validTo | date:'dd.MM.yyyy HH:mm' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Status:</span>
+          <span class="value status-active">{{ signedCert.status }}</span>
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button mat-raised-button color="primary" (click)="downloadCertificate()">
+          <mat-icon>download</mat-icon>
+          Preuzmi sertifikat
+        </button>
+        <button mat-raised-button (click)="newRequest()">
+          <mat-icon>add</mat-icon>
+          Novi zahtjev
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
 

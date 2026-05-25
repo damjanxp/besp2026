@@ -16,6 +16,8 @@ import { MatTableModule } from '@angular/material/table';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatSortModule } from '@angular/material/sort';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AppRoutingModule } from './app-routing.module';
@@ -23,8 +25,11 @@ import { AppComponent } from './app.component';
 import { LoginComponent } from './auth/login/login.component';
 import { RegisterComponent } from './auth/register/register.component';
 import { ActivateAccountComponent } from './auth/activate-account/activate-account.component';
+import { ForgotPasswordComponent } from './auth/forgot-password/forgot-password.component';
+import { ResetPasswordComponent } from './auth/reset-password/reset-password.component';
 import { CertificateListComponent } from './certificates/certificate-list/certificate-list.component';
 import { CertificateFormComponent } from './certificates/certificate-form/certificate-form.component';
+import { CertificateDetailDialogComponent } from './certificates/certificate-detail-dialog/certificate-detail-dialog.component';
 import { PasswordListComponent } from './password-manager/password-list/password-list.component';
 import { JwtInterceptor } from './shared/interceptors/jwt.interceptor';
 import { RecaptchaModule, RecaptchaFormsModule } from 'ng-recaptcha';
@@ -36,8 +41,11 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
     LoginComponent,
     RegisterComponent,
     ActivateAccountComponent,
+    ForgotPasswordComponent,
+    ResetPasswordComponent,
     CertificateListComponent,
     CertificateFormComponent,
+    CertificateDetailDialogComponent,
     PasswordListComponent,
     CsrUploadComponent
   ],
@@ -62,6 +70,8 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
     MatProgressSpinnerModule,
     MatToolbarModule,
     MatTooltipModule,
+    MatPaginatorModule,
+    MatSortModule,
     RecaptchaModule,
     RecaptchaFormsModule
   ],
@@ -71,4 +81,3 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
   bootstrap: [AppComponent]
 })
 export class AppModule { }
-

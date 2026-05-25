@@ -1,0 +1,83 @@
+<h2 mat-dialog-title>Detalji sertifikata</h2>
+
+<mat-dialog-content>
+  <mat-spinner *ngIf="isLoading" diameter="36" class="center-spinner"></mat-spinner>
+
+  <div *ngIf="!isLoading && errorMessage" class="error-message">
+    {{ errorMessage }}
+  </div>
+
+  <div *ngIf="!isLoading && details" class="details-grid">
+    <div class="detail-row">
+      <span class="label">Serijski broj:</span>
+      <span class="value mono">{{ details.serialNumberFull || details.serialNumber }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Tip:</span>
+      <span class="value">{{ details.type }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Common Name:</span>
+      <span class="value">{{ details.commonName }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Organizacija:</span>
+      <span class="value">{{ details.organization || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Organizaciona jedinica:</span>
+      <span class="value">{{ details.organizationalUnit || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Drzava:</span>
+      <span class="value">{{ details.country || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Pokrajina / Staat:</span>
+      <span class="value">{{ details.state || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Grad:</span>
+      <span class="value">{{ details.locality || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Email:</span>
+      <span class="value">{{ details.emailAddress || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Vazi od:</span>
+      <span class="value">{{ details.validFrom | date:'dd.MM.yyyy' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Vazi do:</span>
+      <span class="value">{{ details.validTo | date:'dd.MM.yyyy' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Status:</span>
+      <span class="value">{{ details.status }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Izdavac:</span>
+      <span class="value">{{ formatIssuer(details) }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Algoritam kljuca:</span>
+      <span class="value">{{ details.keyAlgorithm || '-' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Basic Constraints (CA):</span>
+      <span class="value">{{ formatBoolean(details.basicConstraints) }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Key Usage:</span>
+      <span class="value">{{ formatKeyUsage(details.keyUsage) }}</span>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-stroked-button color="primary" (click)="download('PEM')" [disabled]="!details">Preuzmi PEM</button>
+  <button mat-stroked-button color="primary" (click)="download('DER')" [disabled]="!details">Preuzmi DER</button>
+  <button mat-button (click)="close()">Zatvori</button>
+</mat-dialog-actions>
+
