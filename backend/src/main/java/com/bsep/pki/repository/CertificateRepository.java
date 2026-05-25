@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +26,8 @@ public interface CertificateRepository extends JpaRepository<Certificate, Long> 
     List<Certificate> findByType(CertificateType type);
 
     List<Certificate> findByStatus(CertificateStatus status);
+
+    List<Certificate> findByTypeInAndStatus(Set<CertificateType> types, CertificateStatus status);
 
     Optional<Certificate> findFirstByOwnerAndStatusAndTypeOrderByCreatedAtDesc(
             User owner,

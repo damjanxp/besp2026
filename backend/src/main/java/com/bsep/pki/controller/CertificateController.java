@@ -103,7 +103,7 @@ public class CertificateController {
     }
 
     @GetMapping("/my/public-key")
-    @PreAuthorize("hasRole('END_ENTITY')")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<String> getMyPublicKey(Authentication authentication) {
         User user = resolveUser(authentication);
         var cert = certificateService.getLatestActiveEndEntityCertificate(user)
@@ -128,6 +128,12 @@ public class CertificateController {
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_PLAIN)
                 .body(pem);
+    }
+
+    @GetMapping("/available-cas")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
+    public ResponseEntity<List<CertificateResponse>> getAvailableCas() {
+        return ResponseEntity.ok(certificateService.getAvailableCaCertificates());
     }
 
     private X509Certificate parseCertificate(String pemData) {

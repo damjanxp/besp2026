@@ -37,7 +37,7 @@ public class CsrController {
      * Sign CSR with selected CA and create certificate
      */
     @PostMapping("/upload")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<CsrSignResponse> uploadCsr(
             @RequestParam("csrFile") MultipartFile csrFile,
             @RequestParam("caId") Long caId,
@@ -65,10 +65,9 @@ public class CsrController {
                 .status(signedCert.getStatus().toString())
                 .issuerCommonName(signedCert.getIssuer() != null ? signedCert.getIssuer().getCommonName() : "N/A")
                 .certificateData(signedCert.getCertificateData())
-                .message("CSR je uspješno potpisano i sertifikat je kreiран")
+                .message("CSR je uspješno potpisan i sertifikat je kreiran")
                 .build();
 
         return ResponseEntity.ok(response);
     }
 }
-

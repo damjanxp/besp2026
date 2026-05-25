@@ -34,6 +34,7 @@ import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,6 +46,7 @@ import java.nio.file.Paths;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Date;
@@ -204,6 +206,12 @@ public class CsrService {
     @Autowired
     private KeystoreService keystoreService;
 
+    @Autowired
+    private KeyEncryptionService keyEncryptionService;
+
+    @Value("${app.keystore.dir}")
+    private String keystoreDir;
+
     @Transactional
     public Certificate signCsr(byte[] csrBytes, Long caId, int validDays, User requester) {
         try {
@@ -213,6 +221,20 @@ public class CsrService {
 
             if (caCert.getStatus() != CertificateStatus.ACTIVE) {
                 throw new CsrException("CA sertifikat nije aktivan");
+            }
+
+            if (caCert.getType() != CertificateType.ROOT && caCert.getType() != CertificateType.INTERMEDIATE) {
+                throw new CsrException("Izabrani sertifikat nije CA sertifikat");
+            }
+
+            LocalDateTime now = LocalDateTime.now();
+            if (caCert.getValidTo() == null || !caCert.getValidTo().isAfter(now)) {
+                throw new CsrException("Izabrani CA sertifikat je istekao");
+            }
+
+            long maxDays = Duration.between(now, caCert.getValidTo()).toDays();
+            if (validDays < 1 || validDays > maxDays) {
+                throw new CsrException("Trajanje sertifikata mora biti izmedju 1 i " + maxDays + " dana");
             }
 
             User caOwner = caCert.getOwner();
@@ -233,12 +255,17 @@ public class CsrService {
             Date notAfter = Date.from(validTo.toInstant(ZoneOffset.UTC));
 
             // 4. Build keystore path and load CA's private key
-            String keystorePath = Paths.get(System.getProperty("user.home"), ".keystores",
+            String keystorePath = Paths.get(keystoreDir,
                     String.valueOf(caOwner.getId()), caCert.getKeystoreAlias() + ".p12").toString();
+
+            String caKeystorePassword = keyEncryptionService.decryptPassword(
+                    caOwner.getKeystorePasswordEncrypted(),
+                    keyEncryptionService.generateUserEncryptionKey(caOwner.getId())
+            );
 
             KeystoreService.KeystoreEntry keystoreEntry = keystoreService.loadFromKeystore(
                     caCert.getKeystoreAlias(),
-                    caOwner.getKeystorePasswordEncrypted(),
+                    caKeystorePassword,
                     keystorePath
             );
 

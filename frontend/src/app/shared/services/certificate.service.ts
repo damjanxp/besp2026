@@ -64,4 +64,8 @@ export class CertificateService {
   getCertificates(): Observable<Certificate[]> {
     return this.getAll();
   }
+
+  getAvailableCas(): Observable<Certificate[]> {
+    return this.http.get<Certificate[]>(`${this.API_URL}/available-cas`);
+  }
 }

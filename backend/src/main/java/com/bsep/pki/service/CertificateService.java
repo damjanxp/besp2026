@@ -407,4 +407,14 @@ public class CertificateService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public List<CertificateResponse> getAvailableCaCertificates() {
+        Set<CertificateType> types = Set.of(CertificateType.ROOT, CertificateType.INTERMEDIATE);
+        LocalDateTime now = LocalDateTime.now();
+        return certificateRepository.findByTypeInAndStatus(types, CertificateStatus.ACTIVE).stream()
+                .filter(cert -> cert.getValidTo() != null && cert.getValidTo().isAfter(now))
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
 }

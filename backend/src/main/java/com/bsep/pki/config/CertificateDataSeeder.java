@@ -181,7 +181,7 @@ public class CertificateDataSeeder implements ApplicationRunner {
 
             // 8. Save to keystore
             String alias = "root-" + serialNumber.toString(16).substring(0, 8);
-            String keystorePassword = generateKeystorePassword();
+            String keystorePassword = getOrCreateUserKeystorePassword(admin);
             String keystorePath = resolveKeystorePath(admin.getId(), alias);
             keystoreService.saveToKeystore(
                     alias, keyPair.getPrivate(), certificate,
@@ -189,13 +189,8 @@ public class CertificateDataSeeder implements ApplicationRunner {
                     keystorePassword, keystorePath
             );
 
-            // 9. Encrypt and save keystore password
-            String encryptedKeystorePassword = keyEncryptionService.encryptPassword(
-                    keystorePassword,
-                    keyEncryptionService.generateUserEncryptionKey(admin.getId())
-            );
-            admin.setKeystorePasswordEncrypted(encryptedKeystorePassword);
-            userRepository.save(admin);
+            // 9. Persist user keystore password if needed
+            ensureUserKeystorePasswordStored(admin, keystorePassword);
 
             // 10. Save to database
             Certificate rootCert = Certificate.builder()
@@ -301,7 +296,7 @@ public class CertificateDataSeeder implements ApplicationRunner {
 
             // 9. Save to keystore (owned by caUser)
             String alias = "intermediate-" + serialNumber.toString(16).substring(0, 8);
-            String keystorePassword = generateKeystorePassword();
+            String keystorePassword = getOrCreateUserKeystorePassword(caUser);
             String keystorePath = resolveKeystorePath(caUser.getId(), alias);
             keystoreService.saveToKeystore(
                     alias, keyPair.getPrivate(), certificate,
@@ -309,13 +304,8 @@ public class CertificateDataSeeder implements ApplicationRunner {
                     keystorePassword, keystorePath
             );
 
-            // 10. Encrypt and save keystore password (for caUser, not admin)
-            String encryptedKeystorePassword = keyEncryptionService.encryptPassword(
-                    keystorePassword,
-                    keyEncryptionService.generateUserEncryptionKey(caUser.getId())
-            );
-            caUser.setKeystorePasswordEncrypted(encryptedKeystorePassword);
-            userRepository.save(caUser);
+            // 10. Persist user keystore password if needed
+            ensureUserKeystorePasswordStored(caUser, keystorePassword);
 
             // 11. Save to database (owned by caUser so they can see it in their chain)
             Certificate intermediaCert = Certificate.builder()
@@ -468,6 +458,28 @@ public class CertificateDataSeeder implements ApplicationRunner {
         byte[] randomBytes = new byte[32];
         new SecureRandom().nextBytes(randomBytes);
         return java.util.Base64.getEncoder().encodeToString(randomBytes);
+    }
+
+    private String getOrCreateUserKeystorePassword(User owner) {
+        if (owner.getKeystorePasswordEncrypted() == null || owner.getKeystorePasswordEncrypted().isBlank()) {
+            return generateKeystorePassword();
+        }
+        return keyEncryptionService.decryptPassword(
+                owner.getKeystorePasswordEncrypted(),
+                keyEncryptionService.generateUserEncryptionKey(owner.getId())
+        );
+    }
+
+    private void ensureUserKeystorePasswordStored(User owner, String plaintextPassword) {
+        if (owner.getKeystorePasswordEncrypted() != null && !owner.getKeystorePasswordEncrypted().isBlank()) {
+            return;
+        }
+        String encryptedKeystorePassword = keyEncryptionService.encryptPassword(
+                plaintextPassword,
+                keyEncryptionService.generateUserEncryptionKey(owner.getId())
+        );
+        owner.setKeystorePasswordEncrypted(encryptedKeystorePassword);
+        userRepository.save(owner);
     }
 
     private String resolveKeystorePassword(User owner) {

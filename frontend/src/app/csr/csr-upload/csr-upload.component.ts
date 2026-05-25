@@ -35,13 +35,17 @@ export class CsrUploadComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.certificateService.getCertificates().subscribe({
+    this.certificateService.getAvailableCas().subscribe({
       next: (certs) => {
         this.caList = certs.filter(
           c => (c.type === 'ROOT' || c.type === 'INTERMEDIATE') && c.status === 'ACTIVE'
         );
       },
       error: () => {}
+    });
+
+    this.uploadForm.get('caId')?.valueChanges.subscribe(() => {
+      this.updateValidDaysValidator();
     });
   }
 
@@ -111,10 +115,29 @@ export class CsrUploadComponent implements OnInit {
   getMaxDaysHint(): string {
     const ca = this.getSelectedCa();
     if (!ca) return '';
+    const diffDays = this.getRemainingDays(ca);
+    if (diffDays <= 0) return 'CA sertifikat je istekao';
+    return `Maksimalno ${diffDays} dana (do isteka izabranog CA)`;
+  }
+
+  private updateValidDaysValidator(): void {
+    const maxDays = this.getSelectedCa() ? this.getRemainingDays(this.getSelectedCa()!) : 3650;
+    const validDaysControl = this.uploadForm.get('validDays');
+    if (!validDaysControl) return;
+
+    validDaysControl.setValidators([
+      Validators.required,
+      Validators.min(1),
+      Validators.max(Math.max(1, maxDays))
+    ]);
+    validDaysControl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private getRemainingDays(ca: Certificate): number {
     const validTo = new Date(ca.validTo);
     const today = new Date();
     const diffDays = Math.floor((validTo.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return `Maksimalno ${diffDays} dana (do isteka izabranog CA)`;
+    return Math.max(0, diffDays);
   }
 
   onSubmit(): void {
@@ -153,5 +176,3 @@ export class CsrUploadComponent implements OnInit {
     this.uploadForm.reset({ validDays: 365 });
   }
 }
-
-
