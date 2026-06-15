@@ -25,6 +25,8 @@ export class CertificateFormComponent implements OnInit {
   availableIssuers: CertificateResponse[] = [];
   caUsers: UserProfile[] = [];
   loadingCaUsers = false;
+  endEntityUsers: UserProfile[] = [];
+  loadingEndEntityUsers = false;
 
   constructor(
     private fb: FormBuilder,
@@ -77,6 +79,7 @@ export class CertificateFormComponent implements OnInit {
     if (this.isAdmin) {
       this.loadCaUsers();
     }
+    this.loadEndEntityUsers();
 
     this.certForm.get('type')!.valueChanges.subscribe(t => this.onTypeChange(t));
     this.certForm.get('issuerId')!.valueChanges.subscribe(id => this.onIssuerChange(id));
@@ -95,8 +98,49 @@ export class CertificateFormComponent implements OnInit {
     return this.availableIssuers.find(i => i.id === id) ?? null;
   }
 
+  get currentType(): string {
+    return this.certForm.get('type')!.value;
+  }
+
+  get showOwnerDropdown(): boolean {
+    const type = this.currentType;
+    if (this.isAdmin) return type !== 'ROOT';
+    if (this.isCaUser) return type === 'END_ENTITY';
+    return false;
+  }
+
+  get ownerDropdownUsers(): UserProfile[] {
+    return this.currentType === 'END_ENTITY' ? this.endEntityUsers : this.caUsers;
+  }
+
+  get ownerDropdownLoading(): boolean {
+    return this.currentType === 'END_ENTITY' ? this.loadingEndEntityUsers : this.loadingCaUsers;
+  }
+
+  get ownerDropdownLabel(): string {
+    return this.currentType === 'END_ENTITY'
+      ? 'Dodjeli krajnjem korisniku (opcionalno)'
+      : 'Dodjeli CA korisniku (opcionalno)';
+  }
+
+  get ownerDropdownHint(): string {
+    if (this.currentType === 'END_ENTITY') {
+      return 'Izaberi korisnika kome se dodjeljuje sertifikat. Ako ostaviš prazno, sertifikat ostaje tebi.';
+    }
+    return 'Dodjeli CA korisniku da može koristiti sertifikat za izdavanje. Ako ostaviš prazno, dodjeljuje se tebi.';
+  }
+
+  get noUsersMessage(): string {
+    if (this.currentType === 'END_ENTITY') {
+      return 'Nema registrovanih krajnjih korisnika. Sertifikat će biti dodijeljen tebi.';
+    }
+    return 'Nema registrovanih CA korisnika. Sertifikat će biti dodijeljen adminu.';
+  }
+
   onTypeChange(type: string): void {
     const issuerCtrl = this.certForm.get('issuerId')!;
+    this.certForm.get('ownerEmail')!.setValue(null);
+
     if (type === 'ROOT') {
       issuerCtrl.clearValidators();
       issuerCtrl.setValue(null);
@@ -131,8 +175,15 @@ export class CertificateFormComponent implements OnInit {
     });
   }
 
-  get showOwnerDropdown(): boolean {
-    return this.isAdmin && this.certForm.get('type')!.value !== 'ROOT';
+  loadEndEntityUsers(): void {
+    this.loadingEndEntityUsers = true;
+    this.certificateService.getEndEntityUsers().subscribe({
+      next: (users) => { this.endEntityUsers = users; this.loadingEndEntityUsers = false; },
+      error: (err) => {
+        this.loadingEndEntityUsers = false;
+        console.error('Failed to load end-entity users:', err);
+      }
+    });
   }
 
   onIssuerChange(issuerId: number | null): void {

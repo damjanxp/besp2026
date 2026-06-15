@@ -241,11 +241,16 @@ public class CertificateService {
             }
         }
 
-        // Resolve effective owner: ADMIN may delegate a cert to another user via ownerEmail
+        // Resolve effective owner: ADMIN can delegate to any user; CA_USER can delegate END_ENTITY certs to regular users
         User effectiveOwner = caller;
-        if (isAdmin && request.getOwnerEmail() != null && !request.getOwnerEmail().isBlank()) {
+        boolean isCaUser = caller.getRole() == UserRole.CA_USER;
+        boolean canDelegate = isAdmin || (isCaUser && request.getType() == CertificateType.END_ENTITY);
+        if (canDelegate && request.getOwnerEmail() != null && !request.getOwnerEmail().isBlank()) {
             effectiveOwner = userRepository.findByEmail(request.getOwnerEmail())
                     .orElseThrow(() -> new RuntimeException("Target owner not found: " + request.getOwnerEmail()));
+            if (isCaUser && effectiveOwner.getRole() != UserRole.END_ENTITY) {
+                throw new RuntimeException("CA users can only assign END_ENTITY certificates to regular users");
+            }
         }
 
         LocalDateTime newValidTo = LocalDateTime.now().plusDays(request.getValidDays());

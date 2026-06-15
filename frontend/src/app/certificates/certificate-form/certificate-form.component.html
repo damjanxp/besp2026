@@ -56,22 +56,23 @@
           </div>
         </ng-container>
 
-        <!-- DODJELA VLASNIKA (samo ADMIN, za INTERMEDIATE i END_ENTITY) -->
+        <!-- DODJELA VLASNIKA (ADMIN za sve tipove osim ROOT; CA korisnik samo za END_ENTITY) -->
         <ng-container *ngIf="showOwnerDropdown">
           <h3>Dodjela vlasnika sertifikata</h3>
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Dodjeli CA korisniku (opcionalno)</mat-label>
+          <mat-spinner *ngIf="ownerDropdownLoading" diameter="28" style="margin: 8px auto"></mat-spinner>
+          <mat-form-field appearance="outline" class="full-width" *ngIf="!ownerDropdownLoading">
+            <mat-label>{{ ownerDropdownLabel }}</mat-label>
             <mat-select formControlName="ownerEmail">
-              <mat-option [value]="null">— Ostavi vlasniku: admin (ja) —</mat-option>
-              <mat-option *ngFor="let u of caUsers" [value]="u.email">
+              <mat-option [value]="null">— Ostavi meni ({{ isAdmin ? 'admin' : 'CA korisnik' }}) —</mat-option>
+              <mat-option *ngFor="let u of ownerDropdownUsers" [value]="u.email">
                 {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
               </mat-option>
             </mat-select>
-            <mat-hint>Ako ostaviš prazno, sertifikat će biti dodijeljen tebi (admin). Dodjeli CA korisniku da mogu koristiti sertifikat za izdavanje.</mat-hint>
+            <mat-hint>{{ ownerDropdownHint }}</mat-hint>
           </mat-form-field>
-          <div *ngIf="caUsers.length === 0 && !loadingCaUsers" class="no-issuers">
+          <div *ngIf="ownerDropdownUsers.length === 0 && !ownerDropdownLoading" class="no-issuers">
             <mat-icon>info</mat-icon>
-            <span>Nema registrovanih CA korisnika. Sertifikat će biti dodijeljen adminu.</span>
+            <span>{{ noUsersMessage }}</span>
           </div>
         </ng-container>
 

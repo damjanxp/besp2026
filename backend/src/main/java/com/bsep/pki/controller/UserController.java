@@ -94,6 +94,20 @@ public class UserController {
     }
 
     /**
+     * List all END_ENTITY users — used by ADMIN and CA_USER when issuing an END_ENTITY certificate to a user.
+     */
+    @GetMapping("/end-entity-users")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CA_USER')")
+    public ResponseEntity<List<UserPublicProfileDto>> listEndEntityUsers() {
+        List<UserPublicProfileDto> users = userRepository.findAll().stream()
+                .filter(User::isActive)
+                .filter(u -> u.getRole() == UserRole.END_ENTITY)
+                .map(this::mapToProfile)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(users);
+    }
+
+    /**
      * Retrieve a specific user's public key by their ID.
      * Used when encrypting a password for sharing with a target user.
      */

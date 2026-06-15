@@ -49,7 +49,7 @@ public class UserSession {
     @Builder.Default
     private boolean revoked = false;
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT NOW()")
     private LocalDateTime createdAt;
 
     @PrePersist

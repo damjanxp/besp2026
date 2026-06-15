@@ -4,7 +4,7 @@
   <ng-container *ngIf="authService.isLoggedIn(); else notLoggedIn">
     <span class="user-email">{{ authService.getEmail() }}</span>
     <button mat-button routerLink="/certificates">Sertifikati</button>
-    <button mat-button routerLink="/password-manager">Menadžer lozinki</button>
+    <button mat-button routerLink="/password-manager" *ngIf="authService.getRole() === 'END_ENTITY'">Menadžer lozinki</button>
     <button mat-button routerLink="/csr-upload" *ngIf="authService.getRole() === 'END_ENTITY'">CSR Zahtjev</button>
     <button mat-button routerLink="/templates"
             *ngIf="authService.getRole() === 'ADMIN' || authService.getRole() === 'CA_USER'">

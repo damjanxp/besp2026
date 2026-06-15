@@ -85,14 +85,10 @@ export class CertificateService {
   }
 
   getCaUsers(): Observable<UserProfile[]> {
-    return new Observable(observer => {
-      this.http.get<UserProfile[]>('/api/users').subscribe({
-        next: (users) => {
-          observer.next(users.filter(u => u.role === 'CA_USER'));
-          observer.complete();
-        },
-        error: (err) => observer.error(err)
-      });
-    });
+    return this.http.get<UserProfile[]>('/api/users/ca-users');
+  }
+
+  getEndEntityUsers(): Observable<UserProfile[]> {
+    return this.http.get<UserProfile[]>('/api/users/end-entity-users');
   }
 }

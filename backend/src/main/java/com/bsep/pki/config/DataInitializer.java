@@ -27,9 +27,10 @@ public class DataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        User admin  = seedUser("admin@pki.com", "Petar",  "Admin",    null,           UserRole.ADMIN);
-        User caUser = seedUser("ca@pki.com",    "Marija", "Certic",   "FTN Novi Sad", UserRole.CA_USER);
-        User endEnt = seedUser("user@pki.com",  "Nikola", "Korisnik", "Test Org",     UserRole.END_ENTITY);
+        User admin  = seedUser("admin@pki.com",  "Petar",  "Admin",     null,           UserRole.ADMIN);
+        User caUser = seedUser("ca@pki.com",     "Marija", "Certic",   "FTN Novi Sad", UserRole.CA_USER);
+        User endEnt = seedUser("user@pki.com",   "Nikola", "Korisnik", "Test Org",     UserRole.END_ENTITY);
+                      seedUser("user2@pki.com",  "Ana",    "Korisnik2","Test Org 2",   UserRole.END_ENTITY);
 
         seedCertificates(admin, caUser, endEnt);
     }

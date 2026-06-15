@@ -26,6 +26,7 @@ export class PasswordListComponent implements OnInit {
   addForm: FormGroup;
   publicKey: CryptoKey | null = null;
   publicKeyLoaded = false;
+  loadingServerKey = false;
   addLoading = false;
 
   // Public key registration (store key on server)
@@ -67,6 +68,29 @@ export class PasswordListComponent implements OnInit {
     });
   }
 
+  async toggleAddForm(): Promise<void> {
+    this.showAddForm = !this.showAddForm;
+    if (this.showAddForm && !this.publicKeyLoaded) {
+      await this.autoLoadServerPublicKey();
+    }
+  }
+
+  private async autoLoadServerPublicKey(): Promise<void> {
+    this.loadingServerKey = true;
+    try {
+      const profile = await this.passwordManagerService.getMyPublicKey().toPromise();
+      if (profile?.publicKeySpki) {
+        this.publicKey = await this.cryptoService.importPublicKey(profile.publicKeySpki);
+        this.publicKeyLoaded = true;
+        this.serverPublicKeyStatus = 'saved';
+      }
+    } catch {
+      // Key not on server or import failed — user must upload manually
+    } finally {
+      this.loadingServerKey = false;
+    }
+  }
+
   /**
    * Upload a public key PEM file and register it on the server.
    * Called separately from the encryption flow so the key is stored once
@@ -79,10 +103,13 @@ export class PasswordListComponent implements OnInit {
     try {
       const pem = await this.cryptoService.readFileAsText(file);
       // Validate that the PEM can actually be imported before saving
-      await this.cryptoService.importPublicKey(pem);
+      const imported = await this.cryptoService.importPublicKey(pem);
       this.passwordManagerService.saveMyPublicKey(pem.trim()).subscribe({
         next: () => {
           this.serverPublicKeyStatus = 'saved';
+          // Also update the in-memory key used for add form
+          this.publicKey = imported;
+          this.publicKeyLoaded = true;
           this.snackBar.open('Javni ključ registrovan na serveru ✓', 'OK', { duration: 3000 });
           this.registeringPublicKey = false;
         },
@@ -116,7 +143,7 @@ export class PasswordListComponent implements OnInit {
       this.passwordManagerService.saveMyPublicKey(publicPem.trim()).subscribe({
         next: () => {
           this.serverPublicKeyStatus = 'saved';
-          // Also load it locally for immediate use in add form
+          // Load it locally so the add form can use it immediately
           this.cryptoService.importPublicKey(publicPem).then(k => {
             this.publicKey = k;
             this.publicKeyLoaded = true;
@@ -196,7 +223,7 @@ export class PasswordListComponent implements OnInit {
   async onAddSubmit(): Promise<void> {
     if (this.addForm.invalid) return;
     if (!this.publicKey) {
-      this.snackBar.open('Prvo učitajte javni ključ za enkripciju', 'OK', { duration: 3000 });
+      this.snackBar.open('Javni ključ nije dostupan. Registrujte ga na serveru.', 'OK', { duration: 3000 });
       return;
     }
     this.addLoading = true;
@@ -208,8 +235,6 @@ export class PasswordListComponent implements OnInit {
           this.snackBar.open('Lozinka sačuvana', 'OK', { duration: 2000 });
           this.addForm.reset();
           this.showAddForm = false;
-          this.publicKey = null;
-          this.publicKeyLoaded = false;
           this.loadEntries();
           this.addLoading = false;
         },
@@ -300,4 +325,3 @@ export class PasswordListComponent implements OnInit {
     }
   }
 }
-

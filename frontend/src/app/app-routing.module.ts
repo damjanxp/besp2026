@@ -12,6 +12,7 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
 import { SessionListComponent } from './sessions/session-list/session-list.component';
 import { TemplateListComponent } from './templates/template-list/template-list.component';
 import { authGuard } from './shared/guards/auth.guard';
+import { roleGuard } from './shared/guards/role.guard';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -19,12 +20,12 @@ const routes: Routes = [
   { path: 'activate', component: ActivateAccountComponent },
   { path: 'forgot-password', component: ForgotPasswordComponent },
   { path: 'reset-password', component: ResetPasswordComponent },
-  { path: 'certificates/new', component: CertificateFormComponent, canActivate: [authGuard] },
+  { path: 'certificates/new', component: CertificateFormComponent, canActivate: [roleGuard(['ADMIN', 'CA_USER'])] },
   { path: 'certificates', component: CertificateListComponent, canActivate: [authGuard] },
-  { path: 'password-manager', component: PasswordListComponent, canActivate: [authGuard] },
-  { path: 'csr-upload', component: CsrUploadComponent, canActivate: [authGuard] },
+  { path: 'password-manager', component: PasswordListComponent, canActivate: [roleGuard(['END_ENTITY'])] },
+  { path: 'csr-upload', component: CsrUploadComponent, canActivate: [roleGuard(['END_ENTITY'])] },
   { path: 'sessions', component: SessionListComponent, canActivate: [authGuard] },
-  { path: 'templates', component: TemplateListComponent, canActivate: [authGuard] },
+  { path: 'templates', component: TemplateListComponent, canActivate: [roleGuard(['ADMIN', 'CA_USER'])] },
   { path: '', redirectTo: '/login', pathMatch: 'full' },
   { path: '**', redirectTo: '/login' }
 ];
