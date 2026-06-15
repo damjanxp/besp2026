@@ -14,8 +14,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.X500NameBuilder;
 import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.DERIA5String;
 import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.CRLDistPoint;
+import org.bouncycastle.asn1.x509.DistributionPoint;
+import org.bouncycastle.asn1.x509.DistributionPointName;
 import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -71,6 +77,9 @@ public class CertificateService {
 
     @Value("${app.keystore.dir}")
     private String keystoreDir;
+
+    @Value("${app.base-url}")
+    private String baseUrl;
 
     @Transactional
     public CertificateResponse generateRootCertificate(CreateRootCertificateRequest request, User adminUser) {
@@ -287,6 +296,13 @@ public class CertificateService {
                     extUtils.createSubjectKeyIdentifier(newKeyPair.getPublic()));
             certBuilder.addExtension(Extension.authorityKeyIdentifier, false,
                     extUtils.createAuthorityKeyIdentifier(issuerX509));
+
+            // CRL Distribution Point — clients use this URL to check revocation status
+            String crlUrl = baseUrl + "/api/crl/" + issuerCert.getSerialNumber();
+            GeneralName gn = new GeneralName(GeneralName.uniformResourceIdentifier, new DERIA5String(crlUrl));
+            DistributionPointName dpn = new DistributionPointName(new GeneralNames(gn));
+            certBuilder.addExtension(Extension.cRLDistributionPoints, false,
+                    new CRLDistPoint(new DistributionPoint[]{new DistributionPoint(dpn, null, null)}));
 
             if (request.getType() == CertificateType.INTERMEDIATE) {
                 certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
