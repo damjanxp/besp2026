@@ -1,11 +1,13 @@
 package com.bsep.pki.service;
 
-import com.bsep.pki.model.dto.CertificateResponse;
 import com.bsep.pki.model.dto.CreateRootCertificateRequest;
+import com.bsep.pki.model.dto.CertificateDetailsResponse;
+import com.bsep.pki.model.dto.CertificateResponse;
 import com.bsep.pki.model.entity.Certificate;
 import com.bsep.pki.model.entity.CertificateStatus;
 import com.bsep.pki.model.entity.CertificateType;
 import com.bsep.pki.model.entity.User;
+import com.bsep.pki.model.entity.UserRole;
 import com.bsep.pki.repository.CertificateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.io.StringWriter;
 import com.bsep.pki.model.dto.IssueCertificateRequest;
 import com.bsep.pki.model.entity.RevocationReason;
@@ -34,15 +37,27 @@ import com.bsep.pki.model.entity.UserRole;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.SecureRandom;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 
 @Service
 @RequiredArgsConstructor
@@ -395,6 +410,97 @@ public class CertificateService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<CertificateResponse> getCertificatesForUser(User user, Pageable pageable) {
+        if (user.getRole() == UserRole.ADMIN) {
+            Page<Certificate> page = certificateRepository.findAll(pageable);
+            return page.stream().map(this::mapToResponse).collect(Collectors.toList());
+        }
+
+        if (user.getRole() == UserRole.END_ENTITY) {
+            Page<Certificate> page = certificateRepository.findByOwner(user, pageable);
+            return page.stream().map(this::mapToResponse).collect(Collectors.toList());
+        }
+
+        List<Certificate> sorted = certificateRepository.findAll(resolveSort(pageable));
+        List<Certificate> allowed = filterCertificatesForCaUser(user, sorted);
+        List<Certificate> paged = applyPage(allowed, pageable);
+        return paged.stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public CertificateDetailsResponse getCertificateDetails(Long id, User user) {
+        Certificate cert = requireAccessibleCertificate(id, user);
+        return mapToDetailsResponse(cert);
+    }
+
+    @Transactional(readOnly = true)
+    public Certificate requireAccessibleCertificate(Long id, User user) {
+        Certificate cert = certificateRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Certificate not found"));
+        if (!canAccessCertificate(user, cert)) {
+            throw new AccessDeniedException("Not authorized to access this certificate");
+        }
+        return cert;
+    }
+
+    private boolean canAccessCertificate(User user, Certificate cert) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
+        }
+        if (user.getRole() == UserRole.END_ENTITY) {
+            return cert.getOwner() != null && cert.getOwner().getId().equals(user.getId());
+        }
+        if (user.getRole() == UserRole.CA_USER) {
+            List<Certificate> roots = certificateRepository.findByOwnerAndType(user, CertificateType.ROOT);
+            if (roots.isEmpty()) {
+                return false;
+            }
+            Set<Long> rootIds = roots.stream().map(Certificate::getId).collect(Collectors.toSet());
+            return isInCaChain(cert, rootIds);
+        }
+        return false;
+    }
+
+    private List<Certificate> filterCertificatesForCaUser(User user, List<Certificate> certificates) {
+        List<Certificate> roots = certificateRepository.findByOwnerAndType(user, CertificateType.ROOT);
+        if (roots.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<Long> rootIds = roots.stream().map(Certificate::getId).collect(Collectors.toSet());
+        return certificates.stream()
+                .filter(cert -> isInCaChain(cert, rootIds))
+                .collect(Collectors.toList());
+    }
+
+    private boolean isInCaChain(Certificate cert, Set<Long> rootIds) {
+        Set<Long> visited = new HashSet<>();
+        Certificate current = cert;
+        while (current != null && current.getId() != null && visited.add(current.getId())) {
+            if (rootIds.contains(current.getId())) {
+                return true;
+            }
+            current = current.getIssuer();
+        }
+        return false;
+    }
+
+    private Sort resolveSort(Pageable pageable) {
+        return pageable.getSort().isUnsorted() ? Sort.by(Sort.Direction.DESC, "createdAt") : pageable.getSort();
+    }
+
+    private List<Certificate> applyPage(List<Certificate> certificates, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return certificates;
+        }
+        int start = (int) pageable.getOffset();
+        if (start >= certificates.size()) {
+            return Collections.emptyList();
+        }
+        int end = Math.min(start + pageable.getPageSize(), certificates.size());
+        return certificates.subList(start, end);
+    }
+
     public List<CertificateResponse> getAllCertificates() {
         return certificateRepository.findAll().stream()
                 .map(this::mapToResponse)
@@ -402,21 +508,134 @@ public class CertificateService {
     }
 
     private CertificateResponse mapToResponse(Certificate cert) {
+        X509Certificate x509 = parseX509Certificate(cert.getCertificateData());
+        Map<String, String> subject = parseSubjectAttributes(x509);
         return CertificateResponse.builder()
                 .id(cert.getId())
                 .serialNumber(cert.getSerialNumber())
                 .type(cert.getType().name())
                 .commonName(cert.getCommonName())
                 .organization(cert.getOrganization())
+                .country(subject.get("C"))
                 .issuerCommonName(cert.getIssuer() != null ? cert.getIssuer().getCommonName() : null)
-                .ownerEmail(cert.getOwner() != null ? cert.getOwner().getEmail() : null)
                 .validFrom(cert.getValidFrom())
                 .validTo(cert.getValidTo())
                 .status(cert.getStatus().name())
+                .keyAlgorithm(x509 != null ? x509.getPublicKey().getAlgorithm() : null)
                 .certificateData(cert.getCertificateData())
                 .createdAt(cert.getCreatedAt())
                 .revocationReason(cert.getRevocationReason() != null ? cert.getRevocationReason().name() : null)
                 .revokedAt(cert.getRevokedAt())
                 .build();
     }
+
+    private CertificateDetailsResponse mapToDetailsResponse(Certificate cert) {
+        X509Certificate x509 = parseX509Certificate(cert.getCertificateData());
+        Map<String, String> subject = parseSubjectAttributes(x509);
+        return CertificateDetailsResponse.builder()
+                .id(cert.getId())
+                .serialNumber(cert.getSerialNumber())
+                .serialNumberFull(x509 != null ? x509.getSerialNumber().toString() : cert.getSerialNumber())
+                .type(cert.getType().name())
+                .commonName(cert.getCommonName())
+                .organization(cert.getOrganization())
+                .organizationalUnit(subject.get("OU"))
+                .country(subject.get("C"))
+                .state(subject.get("ST"))
+                .locality(subject.get("L"))
+                .emailAddress(subject.get("EMAILADDRESS"))
+                .issuerCommonName(cert.getIssuer() != null ? cert.getIssuer().getCommonName() : null)
+                .validFrom(cert.getValidFrom())
+                .validTo(cert.getValidTo())
+                .status(cert.getStatus().name())
+                .keyAlgorithm(x509 != null ? x509.getPublicKey().getAlgorithm() : null)
+                .basicConstraints(x509 != null && x509.getBasicConstraints() >= 0)
+                .keyUsage(resolveKeyUsage(x509))
+                .build();
+    }
+
+    private X509Certificate parseX509Certificate(String pemData) {
+        if (pemData == null || pemData.isBlank()) {
+            return null;
+        }
+        try {
+            CertificateFactory factory = CertificateFactory.getInstance("X.509");
+            return (X509Certificate) factory.generateCertificate(
+                    new ByteArrayInputStream(pemData.getBytes(StandardCharsets.US_ASCII))
+            );
+        } catch (Exception e) {
+            log.warn("Failed to parse certificate data", e);
+            return null;
+        }
+    }
+
+    private Map<String, String> parseSubjectAttributes(X509Certificate x509) {
+        if (x509 == null) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> attributes = new HashMap<>();
+        try {
+            javax.naming.ldap.LdapName ldapName = new javax.naming.ldap.LdapName(
+                    x509.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.RFC2253)
+            );
+            for (javax.naming.ldap.Rdn rdn : ldapName.getRdns()) {
+                String type = rdn.getType().toUpperCase();
+                attributes.put(type, String.valueOf(rdn.getValue()));
+                if ("E".equals(type) && !attributes.containsKey("EMAILADDRESS")) {
+                    attributes.put("EMAILADDRESS", String.valueOf(rdn.getValue()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse subject attributes", e);
+        }
+        return attributes;
+    }
+
+    private List<String> resolveKeyUsage(X509Certificate x509) {
+        if (x509 == null) {
+            return Collections.emptyList();
+        }
+        boolean[] usage = x509.getKeyUsage();
+        if (usage == null) {
+            return Collections.emptyList();
+        }
+        List<String> names = new ArrayList<>();
+        String[] labels = new String[] {
+                "digitalSignature",
+                "nonRepudiation",
+                "keyEncipherment",
+                "dataEncipherment",
+                "keyAgreement",
+                "keyCertSign",
+                "cRLSign",
+                "encipherOnly",
+                "decipherOnly"
+        };
+        for (int i = 0; i < usage.length && i < labels.length; i++) {
+            if (usage[i]) {
+                names.add(labels[i]);
+            }
+        }
+        return names;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<Certificate> getLatestActiveEndEntityCertificate(User user) {
+        return certificateRepository.findFirstByOwnerAndStatusAndTypeOrderByCreatedAtDesc(
+                user,
+                CertificateStatus.ACTIVE,
+                CertificateType.END_ENTITY
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<CertificateResponse> getAvailableCaCertificates() {
+        Set<CertificateType> types = Set.of(CertificateType.ROOT, CertificateType.INTERMEDIATE);
+        LocalDateTime now = LocalDateTime.now();
+        return certificateRepository.findByTypeInAndStatus(types, CertificateStatus.ACTIVE).stream()
+                .filter(cert -> cert.getValidTo() != null && cert.getValidTo().isAfter(now))
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
 }

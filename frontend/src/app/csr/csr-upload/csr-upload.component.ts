@@ -3,8 +3,8 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CsrService } from '../../shared/services/csr.service';
 import { CertificateService } from '../../shared/services/certificate.service';
-import { CsrInfo } from '../../core/models/csr.model';
-import { CertificateResponse } from '../../core/models/certificate.model';
+import { CsrInfo, CsrSignResponse } from '../../core/models/csr.model';
+import { Certificate } from '../../core/models/certificate.model';
 
 @Component({
   selector: 'app-csr-upload',
@@ -15,10 +15,11 @@ export class CsrUploadComponent implements OnInit {
   isDragOver = false;
   isLoading = false;
   csrInfo: CsrInfo | null = null;
+  signedCert: CsrSignResponse | null = null;
   selectedFile: File | null = null;
   errorMessage = '';
 
-  caList: CertificateResponse[] = [];
+  caList: Certificate[] = [];
   uploadForm: FormGroup;
 
   constructor(
@@ -34,13 +35,17 @@ export class CsrUploadComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.certificateService.getCertificates().subscribe({
+    this.certificateService.getAvailableCas().subscribe({
       next: (certs) => {
         this.caList = certs.filter(
           c => (c.type === 'ROOT' || c.type === 'INTERMEDIATE') && c.status === 'ACTIVE'
         );
       },
       error: () => {}
+    });
+
+    this.uploadForm.get('caId')?.valueChanges.subscribe(() => {
+      this.updateValidDaysValidator();
     });
   }
 
@@ -79,6 +84,7 @@ export class CsrUploadComponent implements OnInit {
   handleFile(file: File): void {
     this.errorMessage = '';
     this.csrInfo = null;
+    this.signedCert = null;
     this.selectedFile = file;
 
     const reader = new FileReader();
@@ -101,7 +107,7 @@ export class CsrUploadComponent implements OnInit {
     };
   }
 
-  getSelectedCa(): CertificateResponse | null {
+  getSelectedCa(): Certificate | null {
     const caId = this.uploadForm.get('caId')?.value;
     return this.caList.find(c => c.id === caId) ?? null;
   }
@@ -109,10 +115,29 @@ export class CsrUploadComponent implements OnInit {
   getMaxDaysHint(): string {
     const ca = this.getSelectedCa();
     if (!ca) return '';
+    const diffDays = this.getRemainingDays(ca);
+    if (diffDays <= 0) return 'CA sertifikat je istekao';
+    return `Maksimalno ${diffDays} dana (do isteka izabranog CA)`;
+  }
+
+  private updateValidDaysValidator(): void {
+    const maxDays = this.getSelectedCa() ? this.getRemainingDays(this.getSelectedCa()!) : 3650;
+    const validDaysControl = this.uploadForm.get('validDays');
+    if (!validDaysControl) return;
+
+    validDaysControl.setValidators([
+      Validators.required,
+      Validators.min(1),
+      Validators.max(Math.max(1, maxDays))
+    ]);
+    validDaysControl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private getRemainingDays(ca: Certificate): number {
     const validTo = new Date(ca.validTo);
     const today = new Date();
     const diffDays = Math.floor((validTo.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return `Maksimalno ${diffDays} dana (do isteka izabranog CA)`;
+    return Math.max(0, diffDays);
   }
 
   onSubmit(): void {
@@ -120,12 +145,10 @@ export class CsrUploadComponent implements OnInit {
     const { caId, validDays } = this.uploadForm.value;
     this.isLoading = true;
     this.csrService.uploadCsr(this.selectedFile, caId, validDays).subscribe({
-      next: () => {
+      next: (response) => {
         this.isLoading = false;
-        this.snackBar.open('CSR uspješno uploadovan', 'Zatvori', { duration: 4000 });
-        this.csrInfo = null;
-        this.selectedFile = null;
-        this.uploadForm.reset({ validDays: 365 });
+        this.signedCert = response;
+        this.snackBar.open(response.message || 'CSR uspješno potpisano', 'Zatvori', { duration: 4000 });
       },
       error: (err) => {
         this.isLoading = false;
@@ -133,5 +156,23 @@ export class CsrUploadComponent implements OnInit {
       }
     });
   }
-}
 
+  downloadCertificate(): void {
+    if (!this.signedCert) return;
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(this.signedCert.certificateData));
+    element.setAttribute('download', `${this.signedCert.commonName}-cert.pem`);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  }
+
+  newRequest(): void {
+    this.csrInfo = null;
+    this.signedCert = null;
+    this.selectedFile = null;
+    this.errorMessage = '';
+    this.uploadForm.reset({ validDays: 365 });
+  }
+}

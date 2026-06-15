@@ -8,13 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * Represents an active login session (a single issued JWT).
- *
- * SECURITY: The JWT itself is NEVER stored. Only the token's unique identifier
- * ({@code jti} claim) plus metadata is kept, so a token can be individually
- * revoked (e.g. "log out this device") without a server-side token store.
- */
 @Entity
 @Table(name = "user_sessions")
 @Data
@@ -27,7 +20,6 @@ public class UserSession {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** The JWT "jti" claim — links this session record to an issued token. */
     @Column(unique = true, nullable = false)
     private String jti;
 
@@ -41,7 +33,6 @@ public class UserSession {
     @Column(columnDefinition = "TEXT")
     private String userAgent;
 
-    /** Human-friendly label derived from the user agent, e.g. "Chrome na Windows". */
     @Column
     private String deviceLabel;
 
@@ -57,4 +48,12 @@ public class UserSession {
     @Column(nullable = false)
     @Builder.Default
     private boolean revoked = false;
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 }

@@ -1,15 +1,16 @@
-﻿import { Component, ViewChild } from '@angular/core';
+﻿import { Component, ViewChild, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../shared/services/auth.service';
 import { RecaptchaComponent } from 'ng-recaptcha';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss']
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   @ViewChild('captchaRef') captchaRef!: RecaptchaComponent;
   loginForm: FormGroup;
   isLoading = false;
@@ -19,12 +20,22 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute,
+    private snackBar: MatSnackBar
   ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required]],
       captchaToken: ['', Validators.required]
+    });
+  }
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      const message = params['message'];
+      if (message) {
+        this.snackBar.open(message, 'OK', { duration: 5000 });
+      }
     });
   }
   onSubmit(): void {

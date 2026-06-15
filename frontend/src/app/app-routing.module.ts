@@ -3,6 +3,8 @@ import { RouterModule, Routes } from '@angular/router';
 import { LoginComponent } from './auth/login/login.component';
 import { RegisterComponent } from './auth/register/register.component';
 import { ActivateAccountComponent } from './auth/activate-account/activate-account.component';
+import { ForgotPasswordComponent } from './auth/forgot-password/forgot-password.component';
+import { ResetPasswordComponent } from './auth/reset-password/reset-password.component';
 import { CertificateListComponent } from './certificates/certificate-list/certificate-list.component';
 import { CertificateFormComponent } from './certificates/certificate-form/certificate-form.component';
 import { PasswordListComponent } from './password-manager/password-list/password-list.component';
@@ -15,6 +17,8 @@ const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
   { path: 'activate', component: ActivateAccountComponent },
+  { path: 'forgot-password', component: ForgotPasswordComponent },
+  { path: 'reset-password', component: ResetPasswordComponent },
   { path: 'certificates/new', component: CertificateFormComponent, canActivate: [authGuard] },
   { path: 'certificates', component: CertificateListComponent, canActivate: [authGuard] },
   { path: 'password-manager', component: PasswordListComponent, canActivate: [authGuard] },
@@ -30,4 +34,3 @@ const routes: Routes = [
   exports: [RouterModule]
 })
 export class AppRoutingModule { }
-

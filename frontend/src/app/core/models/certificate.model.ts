@@ -32,19 +32,43 @@ export interface UserProfile {
   lastName: string;
   role: string;
 }
-export interface CertificateResponse {
+
+export interface Certificate {
   id: number;
   serialNumber: string;
   type: 'ROOT' | 'INTERMEDIATE' | 'END_ENTITY';
   commonName: string;
-  organization: string;
-  issuerCommonName: string | null;
-  ownerEmail: string;
+  organization?: string;
   validFrom: string;
   validTo: string;
   status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
-  certificateData: string;
-  createdAt: string;
-  revocationReason: string | null;
-  revokedAt: string | null;
+  issuerCommonName?: string | null;
+  keyAlgorithm?: string | null;
+  certificateData?: string;
+  createdAt?: string;
+  revocationReason?: string | null;
+  revokedAt?: string | null;
+}
+
+export type CertificateResponse = Certificate;
+
+export interface CertificateDetails {
+  id: number;
+  serialNumber: string;
+  serialNumberFull?: string;
+  type: 'ROOT' | 'INTERMEDIATE' | 'END_ENTITY';
+  commonName: string;
+  organization: string | null;
+  organizationalUnit?: string | null;
+  country?: string | null;
+  state?: string | null;
+  locality?: string | null;
+  emailAddress?: string | null;
+  validFrom: string;
+  validTo: string;
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  issuerCommonName?: string | null;
+  keyAlgorithm?: string | null;
+  basicConstraints?: boolean;
+  keyUsage?: string[];
 }

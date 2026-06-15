@@ -6,26 +6,31 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CertificateResponse {
+public class CertificateDetailsResponse {
 
     private Long id;
     private String serialNumber;
+    private String serialNumberFull;
     private String type;
     private String commonName;
     private String organization;
+    private String organizationalUnit;
     private String country;
+    private String state;
+    private String locality;
+    private String emailAddress;
     private LocalDateTime validFrom;
     private LocalDateTime validTo;
     private String status;
     private String issuerCommonName;
     private String keyAlgorithm;
-    private String certificateData;
-    private LocalDateTime createdAt;
-    private String revocationReason;
-    private LocalDateTime revokedAt;
+    private boolean basicConstraints;
+    private List<String> keyUsage;
 }
+

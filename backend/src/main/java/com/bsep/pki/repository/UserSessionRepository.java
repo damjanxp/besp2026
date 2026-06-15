@@ -17,4 +17,6 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     List<UserSession> findByUserAndRevokedFalseOrderByLastActivityAtDesc(User user);
 
     List<UserSession> findByExpiresAtBefore(LocalDateTime time);
+
+    List<UserSession> findByUserAndRevokedFalseAndExpiresAtAfter(User user, LocalDateTime now);
 }

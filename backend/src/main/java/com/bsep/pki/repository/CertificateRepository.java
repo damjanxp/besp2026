@@ -8,6 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface CertificateRepository extends JpaRepository<Certificate, Long> {
 
@@ -15,10 +19,21 @@ public interface CertificateRepository extends JpaRepository<Certificate, Long> 
 
     List<Certificate> findByOwner(User owner);
 
+    Page<Certificate> findByOwner(User owner, Pageable pageable);
+
+    List<Certificate> findByOwnerAndType(User owner, CertificateType type);
+
     List<Certificate> findByType(CertificateType type);
 
     List<Certificate> findByStatus(CertificateStatus status);
 
     List<Certificate> findByIssuer(Certificate issuer);
-}
 
+    List<Certificate> findByTypeInAndStatus(Set<CertificateType> types, CertificateStatus status);
+
+    Optional<Certificate> findFirstByOwnerAndStatusAndTypeOrderByCreatedAtDesc(
+            User owner,
+            CertificateStatus status,
+            CertificateType type
+    );
+}

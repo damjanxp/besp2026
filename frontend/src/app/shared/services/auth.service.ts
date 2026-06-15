@@ -1,7 +1,7 @@
 ﻿﻿import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { LoginRequest, RegisterRequest, AuthResponse } from '../../core/models/auth.model';
+import { LoginRequest, RegisterRequest, AuthResponse, ForgotPasswordRequest, ResetPasswordRequest } from '../../core/models/auth.model';
 @Injectable({
   providedIn: 'root'
 })
@@ -15,6 +15,15 @@ export class AuthService {
   register(request: RegisterRequest): Observable<any> {
     return this.http.post(this.API_URL + '/register', request);
   }
+
+  forgotPassword(request: ForgotPasswordRequest): Observable<any> {
+    return this.http.post(this.API_URL + '/forgot-password', request);
+  }
+
+  resetPassword(request: ResetPasswordRequest): Observable<any> {
+    return this.http.put(this.API_URL + '/reset-password', request);
+  }
+
   activateAccount(token: string): Observable<any> {
     return this.http.get(this.API_URL + '/activate', { params: { token } });
   }

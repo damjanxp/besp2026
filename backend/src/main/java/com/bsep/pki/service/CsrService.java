@@ -2,6 +2,11 @@ package com.bsep.pki.service;
 
 import com.bsep.pki.exception.CsrException;
 import com.bsep.pki.model.dto.CsrInfoDto;
+import com.bsep.pki.model.entity.Certificate;
+import com.bsep.pki.model.entity.CertificateStatus;
+import com.bsep.pki.model.entity.CertificateType;
+import com.bsep.pki.model.entity.User;
+import com.bsep.pki.repository.CertificateRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
@@ -9,20 +14,42 @@ import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
 import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.ContentVerifierProvider;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
-import org.bouncycastle.util.io.pem.PemWriter;
 import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.math.BigInteger;
+import java.nio.file.Paths;
+import java.security.PrivateKey;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Date;
 
 @Service
 @Slf4j
@@ -172,5 +199,148 @@ public class CsrService {
             return null;
         }
     }
-}
 
+    @Autowired
+    private CertificateRepository certificateRepository;
+
+    @Autowired
+    private KeystoreService keystoreService;
+
+    @Autowired
+    private KeyEncryptionService keyEncryptionService;
+
+    @Value("${app.keystore.dir}")
+    private String keystoreDir;
+
+    @Transactional
+    public Certificate signCsr(byte[] csrBytes, Long caId, int validDays, User requester) {
+        try {
+            // 1. Load the CA certificate
+            Certificate caCert = certificateRepository.findById(caId)
+                    .orElseThrow(() -> new CsrException("CA sertifikat nije pronađen"));
+
+            if (caCert.getStatus() != CertificateStatus.ACTIVE) {
+                throw new CsrException("CA sertifikat nije aktivan");
+            }
+
+            if (caCert.getType() != CertificateType.ROOT && caCert.getType() != CertificateType.INTERMEDIATE) {
+                throw new CsrException("Izabrani sertifikat nije CA sertifikat");
+            }
+
+            LocalDateTime now = LocalDateTime.now();
+            if (caCert.getValidTo() == null || !caCert.getValidTo().isAfter(now)) {
+                throw new CsrException("Izabrani CA sertifikat je istekao");
+            }
+
+            long maxDays = Duration.between(now, caCert.getValidTo()).toDays();
+            if (validDays < 1 || validDays > maxDays) {
+                throw new CsrException("Trajanje sertifikata mora biti izmedju 1 i " + maxDays + " dana");
+            }
+
+            User caOwner = caCert.getOwner();
+            if (caOwner == null) {
+                throw new CsrException("CA sertifikat nema vlasnika");
+            }
+
+            // 2. Parse CSR
+            PKCS10CertificationRequest csr = readCsr(csrBytes);
+            X500Name subject = csr.getSubject();
+            SubjectPublicKeyInfo subjectPublicKeyInfo = csr.getSubjectPublicKeyInfo();
+
+            // 3. Generate serial number and validity period
+            BigInteger serialNumber = new BigInteger(64, new SecureRandom());
+            LocalDateTime validFrom = LocalDateTime.now();
+            LocalDateTime validTo = validFrom.plusDays(validDays);
+            Date notBefore = new Date();
+            Date notAfter = Date.from(validTo.toInstant(ZoneOffset.UTC));
+
+            // 4. Build keystore path and load CA's private key
+            String keystorePath = Paths.get(keystoreDir,
+                    String.valueOf(caOwner.getId()), caCert.getKeystoreAlias() + ".p12").toString();
+
+            String caKeystorePassword = keyEncryptionService.decryptPassword(
+                    caOwner.getKeystorePasswordEncrypted(),
+                    keyEncryptionService.generateUserEncryptionKey(caOwner.getId())
+            );
+
+            KeystoreService.KeystoreEntry keystoreEntry = keystoreService.loadFromKeystore(
+                    caCert.getKeystoreAlias(),
+                    caKeystorePassword,
+                    keystorePath
+            );
+
+            PrivateKey caPrivateKey = keystoreEntry.privateKey();
+            X509Certificate caCertX509 = keystoreEntry.certificate();
+
+            if (caPrivateKey == null || caCertX509 == null) {
+                throw new CsrException("Ne mogu učitati privatni ključ ili sertifikat CA");
+            }
+
+            // 5. Build and sign the new certificate
+            X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder(
+                    new X500Name(caCertX509.getSubjectX500Principal().getName()),
+                    serialNumber,
+                    notBefore,
+                    notAfter,
+                    subject,
+                    subjectPublicKeyInfo
+            );
+
+            JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
+
+            // End-entity certificate constraints
+            certBuilder.addExtension(Extension.basicConstraints, true,
+                    new BasicConstraints(false));
+            certBuilder.addExtension(Extension.keyUsage, true,
+                    new KeyUsage(KeyUsage.digitalSignature | KeyUsage.dataEncipherment));
+
+            certBuilder.addExtension(Extension.subjectKeyIdentifier, false,
+                    extUtils.createSubjectKeyIdentifier(subjectPublicKeyInfo));
+            certBuilder.addExtension(Extension.authorityKeyIdentifier, false,
+                    extUtils.createAuthorityKeyIdentifier(caCertX509.getPublicKey()));
+
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption")
+                    .setProvider("BC")
+                    .build(caPrivateKey);
+
+            X509CertificateHolder certHolder = certBuilder.build(signer);
+            X509Certificate signedCert = new JcaX509CertificateConverter()
+                    .setProvider("BC")
+                    .getCertificate(certHolder);
+
+            // 6. Convert to PEM
+            StringWriter sw = new StringWriter();
+            try (JcaPEMWriter pw = new JcaPEMWriter(sw)) {
+                pw.writeObject(signedCert);
+            }
+            String pemData = sw.toString();
+
+            // 7. Extract CN from subject for display
+            String commonName = getRdn(subject, BCStyle.CN);
+            String organization = getRdn(subject, BCStyle.O);
+
+            // 8. Save to database
+            Certificate newCert = Certificate.builder()
+                    .serialNumber(serialNumber.toString())
+                    .type(CertificateType.END_ENTITY)
+                    .commonName(commonName != null ? commonName : "Unknown")
+                    .organization(organization != null ? organization : "Unknown")
+                    .issuer(caCert)
+                    .owner(requester)
+                    .validFrom(validFrom)
+                    .validTo(validTo)
+                    .status(CertificateStatus.ACTIVE)
+                    .keystoreAlias(null) // End-entity certs aren't stored in keystores
+                    .certificateData(pemData)
+                    .build();
+
+            return certificateRepository.save(newCert);
+
+        } catch (CsrException ce) {
+            throw ce;
+        } catch (Exception ex) {
+            log.error("Error signing CSR", ex);
+            throw new CsrException("Greška pri potpisivanju CSR: " + ex.getMessage(), ex);
+        }
+    }
+}

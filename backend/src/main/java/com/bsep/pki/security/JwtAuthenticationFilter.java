@@ -56,8 +56,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                // The token must validate AND its session must still be active (not revoked/expired).
-                // This is what makes "log out this device" take effect immediately.
                 Optional<UserSession> activeSession = sessionService.findValid(jti);
                 if (jwtService.validateToken(jwt, userDetails) && activeSession.isPresent()) {
                     sessionService.touch(activeSession.get());
@@ -80,4 +78,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
-

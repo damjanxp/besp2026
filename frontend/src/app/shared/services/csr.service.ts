@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { CsrInfo } from '../../core/models/csr.model';
+import { CsrInfo, CsrSignResponse } from '../../core/models/csr.model';
 
 @Injectable({
   providedIn: 'root'
@@ -17,12 +17,12 @@ export class CsrService {
     return this.http.post<CsrInfo>(`${this.API_URL}/preview`, formData);
   }
 
-  uploadCsr(file: File, caId: number, validDays: number): Observable<any> {
+  uploadCsr(file: File, caId: number, validDays: number): Observable<CsrSignResponse> {
     const formData = new FormData();
     formData.append('csrFile', file);
     formData.append('caId', caId.toString());
     formData.append('validDays', validDays.toString());
-    return this.http.post(`${this.API_URL}/upload`, formData);
+    return this.http.post<CsrSignResponse>(`${this.API_URL}/upload`, formData);
   }
 }
 
