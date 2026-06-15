@@ -1,0 +1,128 @@
+<div class="page-container">
+  <div class="header-row">
+    <h2>Šabloni sertifikata</h2>
+    <button mat-raised-button color="primary" (click)="toggleForm()">
+      <mat-icon>{{ showForm ? 'close' : 'add' }}</mat-icon>
+      {{ showForm ? 'Otkaži' : 'Novi šablon' }}
+    </button>
+  </div>
+
+  <!-- FORMA ZA KREIRANJE -->
+  <mat-card *ngIf="showForm" class="form-card">
+    <mat-card-header>
+      <mat-card-title>Kreiraj novi šablon</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="createForm" (ngSubmit)="onSubmit()">
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Naziv šablona</mat-label>
+            <input matInput formControlName="name" placeholder="npr. TLS Server Template">
+            <mat-error>Naziv je obavezan</mat-error>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>CA sertifikat (izdavač)</mat-label>
+            <mat-select formControlName="caIssuerId">
+              <mat-option *ngFor="let ca of availableCAs" [value]="ca.id">
+                [{{ ca.type }}] {{ ca.commonName }}
+              </mat-option>
+            </mat-select>
+            <mat-error>CA je obavezan</mat-error>
+            <mat-hint *ngIf="availableCAs.length === 0">Nema dostupnih CA sertifikata</mat-hint>
+          </mat-form-field>
+        </div>
+
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Maks. trajanje (dani)</mat-label>
+            <input matInput type="number" formControlName="maxTtlDays" placeholder="npr. 365">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Upotreba ključa (Key Usage)</mat-label>
+            <input matInput formControlName="defaultKeyUsage" placeholder="npr. digitalSignature,keyEncipherment">
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Proširena upotreba ključa (Extended Key Usage)</mat-label>
+          <input matInput formControlName="defaultExtendedKeyUsage" placeholder="npr. serverAuth,clientAuth">
+        </mat-form-field>
+
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>CN regex (opcionalno)</mat-label>
+            <input matInput formControlName="cnRegex" placeholder="npr. .*\.mojdomen\.com">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>SAN regex (opcionalno)</mat-label>
+            <input matInput formControlName="sanRegex" placeholder="npr. DNS:.*\.mojdomen\.com">
+          </mat-form-field>
+        </div>
+
+        <div class="button-row">
+          <button mat-button type="button" (click)="toggleForm()">Otkaži</button>
+          <button mat-raised-button color="primary" type="submit"
+                  [disabled]="createForm.invalid || isSubmitting || availableCAs.length === 0">
+            <mat-spinner *ngIf="isSubmitting" diameter="18" class="inline-spinner"></mat-spinner>
+            <span *ngIf="!isSubmitting">Kreiraj šablon</span>
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- TABELA -->
+  <mat-spinner *ngIf="isLoading" diameter="40" class="center-spinner"></mat-spinner>
+
+  <div *ngIf="!isLoading && dataSource.data.length === 0" class="empty-message">
+    <mat-icon>description</mat-icon>
+    <p>Nema kreiranih šablona. Klikni "Novi šablon" da kreiraš prvi.</p>
+  </div>
+
+  <table mat-table [dataSource]="dataSource" class="full-width"
+         *ngIf="!isLoading && dataSource.data.length > 0">
+
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef>Naziv</th>
+      <td mat-cell *matCellDef="let t"><strong>{{ t.name }}</strong></td>
+    </ng-container>
+
+    <ng-container matColumnDef="caIssuerCommonName">
+      <th mat-header-cell *matHeaderCellDef>CA sertifikat</th>
+      <td mat-cell *matCellDef="let t">{{ t.caIssuerCommonName }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="maxTtlDays">
+      <th mat-header-cell *matHeaderCellDef>Maks. dani</th>
+      <td mat-cell *matCellDef="let t">{{ t.maxTtlDays ?? '—' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="defaultKeyUsage">
+      <th mat-header-cell *matHeaderCellDef>Key Usage</th>
+      <td mat-cell *matCellDef="let t" class="usage-cell">{{ t.defaultKeyUsage ?? '—' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="ownerEmail">
+      <th mat-header-cell *matHeaderCellDef>Vlasnik</th>
+      <td mat-cell *matCellDef="let t">{{ t.ownerEmail }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="createdAt">
+      <th mat-header-cell *matHeaderCellDef>Kreiran</th>
+      <td mat-cell *matCellDef="let t">{{ t.createdAt | date:'dd.MM.yyyy' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef></th>
+      <td mat-cell *matCellDef="let t">
+        <button mat-icon-button color="warn" matTooltip="Obriši šablon"
+                (click)="deleteTemplate(t)">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+</div>

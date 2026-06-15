@@ -1,0 +1,64 @@
+<div class="sessions-container">
+  <div class="sessions-header">
+    <h2>Aktivne sesije</h2>
+    <button mat-stroked-button (click)="loadSessions()">
+      <mat-icon>refresh</mat-icon> Osveži
+    </button>
+  </div>
+
+  <p class="sessions-hint">
+    Lista uređaja i pregledača na kojima ste trenutno prijavljeni. Opozovite bilo koju sesiju
+    da biste se odjavili sa tog uređaja (npr. ako ste zaboravili da se odjavite sa javnog računara).
+  </p>
+
+  <mat-card>
+    <mat-card-content>
+      <div *ngIf="loading" class="loading-center">
+        <mat-spinner diameter="40"></mat-spinner>
+      </div>
+
+      <p *ngIf="!loading && sessions.length === 0" class="empty-state">
+        Nema aktivnih sesija.
+      </p>
+
+      <table mat-table [dataSource]="sessions" *ngIf="!loading && sessions.length > 0" class="full-width">
+
+        <ng-container matColumnDef="device">
+          <th mat-header-cell *matHeaderCellDef>Uređaj / Browser</th>
+          <td mat-cell *matCellDef="let s">
+            {{ s.deviceLabel }}
+            <span *ngIf="s.current" class="current-badge">trenutna</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="ipAddress">
+          <th mat-header-cell *matHeaderCellDef>IP adresa</th>
+          <td mat-cell *matCellDef="let s">{{ s.ipAddress }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lastActivityAt">
+          <th mat-header-cell *matHeaderCellDef>Poslednja aktivnost</th>
+          <td mat-cell *matCellDef="let s">{{ s.lastActivityAt | date:'dd.MM.yyyy. HH:mm' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="issuedAt">
+          <th mat-header-cell *matHeaderCellDef>Prijava</th>
+          <td mat-cell *matCellDef="let s">{{ s.issuedAt | date:'dd.MM.yyyy. HH:mm' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let s">
+            <button mat-stroked-button color="warn" (click)="revoke(s)">
+              <mat-icon>logout</mat-icon>
+              {{ s.current ? 'Odjavi ovaj uređaj' : 'Opozovi' }}
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </mat-card-content>
+  </mat-card>
+</div>
