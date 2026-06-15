@@ -22,8 +22,9 @@
           <mat-error>Prezime je obavezno</mat-error>
         </mat-form-field>
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Organizacija (opciono)</mat-label>
+          <mat-label>Organizacija</mat-label>
           <input matInput formControlName="organization">
+          <mat-error *ngIf="registerForm.get('organization')?.hasError('required')">Organizacija je obavezna</mat-error>
         </mat-form-field>
         <!-- Password -->
         <mat-form-field appearance="outline" class="full-width">

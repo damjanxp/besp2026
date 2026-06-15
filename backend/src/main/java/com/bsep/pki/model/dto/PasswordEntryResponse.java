@@ -21,5 +21,6 @@ public class PasswordEntryResponse {
     private String encryptedPassword; // Included for the current user's share
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String createdByEmail;
 }
 

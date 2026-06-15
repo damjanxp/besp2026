@@ -24,14 +24,14 @@ public class PasswordManagerController {
     private final UserRepository userRepository;
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<List<PasswordEntryResponse>> getMyPasswords(Authentication authentication) {
         User currentUser = resolveUser(authentication);
         return ResponseEntity.ok(passwordManagerService.getMyPasswords(currentUser));
     }
 
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<PasswordEntryResponse> savePassword(
             @Valid @RequestBody SavePasswordRequest request,
             Authentication authentication
@@ -41,7 +41,7 @@ public class PasswordManagerController {
     }
 
     @PostMapping("/{id}/share")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<Void> sharePassword(
             @PathVariable Long id,
             @Valid @RequestBody SharePasswordRequest request,
@@ -53,7 +53,7 @@ public class PasswordManagerController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('END_ENTITY')")
     public ResponseEntity<Void> deletePassword(
             @PathVariable Long id,
             Authentication authentication

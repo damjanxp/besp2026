@@ -18,6 +18,7 @@ public class UserPublicProfileDto {
     private String email;
     private String firstName;
     private String lastName;
+    private String role;
     /** RSA public key in SPKI PEM format. Null if the user has not uploaded their key yet. */
     private String publicKeySpki;
 }

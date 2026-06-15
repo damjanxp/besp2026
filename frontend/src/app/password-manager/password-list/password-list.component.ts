@@ -2,8 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PasswordEntry } from '../../core/models/password-manager.model';
-import { PasswordManagerService } from '../../shared/services/password-manager.service';
+import { PasswordManagerService, UserPublicProfile } from '../../shared/services/password-manager.service';
 import { CryptoService } from '../../shared/services/crypto.service';
+import { AuthService } from '../../shared/services/auth.service';
 
 @Component({
   selector: 'app-password-list',
@@ -32,11 +33,18 @@ export class PasswordListComponent implements OnInit {
   registeringPublicKey = false;
   generatingKeyPair = false;
 
+  // For sharing
+  shareEntry: PasswordEntry | null = null;
+  shareableUsers: UserPublicProfile[] = [];
+  selectedTargetUserId: number | null = null;
+  sharing = false;
+
   constructor(
     private passwordManagerService: PasswordManagerService,
     private cryptoService: CryptoService,
     private snackBar: MatSnackBar,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private authService: AuthService
   ) {
     this.addForm = this.fb.group({
       siteName: ['', Validators.required],
@@ -225,6 +233,71 @@ export class PasswordListComponent implements OnInit {
       },
       error: () => this.snackBar.open('Greška pri brisanju', 'OK', { duration: 3000 })
     });
+  }
+
+  /**
+   * Open the share panel for an entry.
+   * Requires the private key to be loaded (needed to decrypt before re-encrypting).
+   */
+  openShare(entry: PasswordEntry): void {
+    if (!this.privateKeyLoaded) {
+      this.snackBar.open('Prvo učitajte privatni ključ — potreban je za dekripciju pre deljenja.', 'OK', { duration: 4000 });
+      return;
+    }
+    this.selectedTargetUserId = null;
+    this.shareEntry = entry;
+    const myEmail = this.authService.getEmail();
+    this.passwordManagerService.listUsers().subscribe({
+      next: (users) => {
+        // Only users that have a registered public key and are not the current user
+        this.shareableUsers = users.filter(u => u.publicKeySpki && u.email !== myEmail);
+        if (this.shareableUsers.length === 0) {
+          this.snackBar.open('Nema dostupnih korisnika sa registrovanim javnim ključem.', 'OK', { duration: 4000 });
+        }
+      },
+      error: () => this.snackBar.open('Greška pri učitavanju korisnika', 'OK', { duration: 3000 })
+    });
+  }
+
+  cancelShare(): void {
+    this.shareEntry = null;
+    this.shareableUsers = [];
+    this.selectedTargetUserId = null;
+  }
+
+  async submitShare(): Promise<void> {
+    if (!this.shareEntry || !this.selectedTargetUserId || !this.privateKey) return;
+    const target = this.shareableUsers.find(u => u.id === this.selectedTargetUserId);
+    if (!target || !target.publicKeySpki) {
+      this.snackBar.open('Odabrani korisnik nema javni ključ.', 'OK', { duration: 3000 });
+      return;
+    }
+    this.sharing = true;
+    try {
+      // 1) Decrypt the entry with my private key
+      const plaintext = await this.cryptoService.decryptPassword(this.shareEntry.encryptedPassword, this.privateKey);
+      // 2) Re-encrypt with the target user's public key
+      const targetPublicKey = await this.cryptoService.importPublicKey(target.publicKeySpki);
+      const reEncrypted = await this.cryptoService.encryptPassword(plaintext, targetPublicKey);
+      // 3) Send to backend
+      this.passwordManagerService.sharePassword(this.shareEntry.id, {
+        targetUserId: target.id,
+        encryptedPassword: reEncrypted
+      }).subscribe({
+        next: () => {
+          this.snackBar.open(`Lozinka podeljena sa ${target.email} ✓`, 'OK', { duration: 3000 });
+          this.cancelShare();
+          this.sharing = false;
+        },
+        error: (err) => {
+          this.snackBar.open(err.error?.message || 'Greška pri deljenju lozinke', 'OK', { duration: 3000 });
+          this.sharing = false;
+        }
+      });
+    } catch {
+      this.snackBar.open('Dekripcija nije uspela. Proverite da li je učitan ispravan privatni ključ.', 'OK', { duration: 4000 });
+      this.sharing = false;
+    }
   }
 }
 

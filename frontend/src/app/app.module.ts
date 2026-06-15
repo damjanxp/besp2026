@@ -3,7 +3,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { CommonModule } from '@angular/common';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-import { ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -29,6 +29,8 @@ import { PasswordListComponent } from './password-manager/password-list/password
 import { JwtInterceptor } from './shared/interceptors/jwt.interceptor';
 import { RecaptchaModule, RecaptchaFormsModule } from 'ng-recaptcha';
 import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
+import { SessionListComponent } from './sessions/session-list/session-list.component';
+import { TemplateListComponent } from './templates/template-list/template-list.component';
 
 @NgModule({
   declarations: [
@@ -39,7 +41,9 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
     CertificateListComponent,
     CertificateFormComponent,
     PasswordListComponent,
-    CsrUploadComponent
+    CsrUploadComponent,
+    SessionListComponent,
+    TemplateListComponent
   ],
   imports: [
     BrowserModule,
@@ -47,6 +51,7 @@ import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
     BrowserAnimationsModule,
     HttpClientModule,
     ReactiveFormsModule,
+    FormsModule,
     AppRoutingModule,
     MatCardModule,
     MatFormFieldModule,

@@ -32,7 +32,6 @@ public class PasswordManagerService {
      */
     @Transactional
     public PasswordEntryResponse savePassword(SavePasswordRequest request, User currentUser) {
-        // TODO (KT2): Implement full save logic when Web Crypto API is integrated on frontend
         PasswordEntry entry = PasswordEntry.builder()
                 .siteName(request.getSiteName())
                 .username(request.getUsername())
@@ -61,7 +60,6 @@ public class PasswordManagerService {
      * The encrypted password for each entry corresponds to the user's own share.
      */
     public List<PasswordEntryResponse> getMyPasswords(User currentUser) {
-        // TODO (KT2): Full implementation with Web Crypto decryption on frontend
         List<PasswordShare> shares = passwordShareRepository.findByUser(currentUser);
         return shares.stream()
                 .map(share -> mapToResponse(share.getEntry(), share.getEncryptedPassword()))
@@ -74,23 +72,29 @@ public class PasswordManagerService {
      */
     @Transactional
     public void sharePassword(Long entryId, SharePasswordRequest request, User currentUser) {
-        // TODO (KT2): Full implementation including public key retrieval
         PasswordEntry entry = passwordEntryRepository.findById(entryId)
                 .orElseThrow(() -> new RuntimeException("Password entry not found"));
 
         User targetUser = userRepository.findById(request.getTargetUserId())
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
+        // Cannot share with yourself
+        if (targetUser.getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Cannot share a password entry with yourself");
+        }
+
         // Check current user has access to this entry
         passwordShareRepository.findByEntryAndUser(entry, currentUser)
                 .orElseThrow(() -> new RuntimeException("Access denied to this password entry"));
 
-        PasswordShare share = PasswordShare.builder()
-                .entry(entry)
-                .user(targetUser)
-                .encryptedPassword(request.getEncryptedPassword())
-                .sharedBy(currentUser)
-                .build();
+        // Upsert: if already shared with the target, update the encrypted payload instead of duplicating
+        PasswordShare share = passwordShareRepository.findByEntryAndUser(entry, targetUser)
+                .orElseGet(() -> PasswordShare.builder()
+                        .entry(entry)
+                        .user(targetUser)
+                        .sharedBy(currentUser)
+                        .build());
+        share.setEncryptedPassword(request.getEncryptedPassword());
 
         passwordShareRepository.save(share);
         log.info("Password entry {} shared by {} with {}", entryId, currentUser.getEmail(), targetUser.getEmail());
@@ -124,6 +128,7 @@ public class PasswordManagerService {
                 .encryptedPassword(encryptedPassword)
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
+                .createdByEmail(entry.getCreatedBy() != null ? entry.getCreatedBy().getEmail() : null)
                 .build();
     }
 }

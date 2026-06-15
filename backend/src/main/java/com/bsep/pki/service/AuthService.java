@@ -37,6 +37,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
     private final CaptchaService captchaService;
+    private final SessionService sessionService;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -104,7 +105,7 @@ public class AuthService {
         activationTokenRepository.save(activationToken);
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
         captchaService.verifyRecaptcha(request.getCaptchaToken());
 
         User user = userRepository.findByEmail(request.getEmail())
@@ -122,6 +123,10 @@ public class AuthService {
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String token = jwtService.generateToken(userDetails);
+
+        // Register an active session keyed by the token's jti (the JWT itself is not stored)
+        String jti = jwtService.extractJti(token);
+        sessionService.createSession(user, jti, ipAddress, userAgent, jwtService.getExpirationMs());
 
         return AuthResponse.builder()
                 .token(token)

@@ -18,5 +18,7 @@ public interface CertificateRepository extends JpaRepository<Certificate, Long> 
     List<Certificate> findByType(CertificateType type);
 
     List<Certificate> findByStatus(CertificateStatus status);
+
+    List<Certificate> findByIssuer(Certificate issuer);
 }
 

@@ -1,5 +1,7 @@
 package com.bsep.pki.security;
 
+import com.bsep.pki.model.entity.UserSession;
+import com.bsep.pki.service.SessionService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -21,6 +24,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
+    private final SessionService sessionService;
+
+    public static final String CURRENT_JTI_ATTRIBUTE = "currentJti";
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -45,11 +51,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             final String email = jwtService.extractUsername(jwt);
+            final String jti = jwtService.extractJti(jwt);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                if (jwtService.validateToken(jwt, userDetails)) {
+                // The token must validate AND its session must still be active (not revoked/expired).
+                // This is what makes "log out this device" take effect immediately.
+                Optional<UserSession> activeSession = sessionService.findValid(jti);
+                if (jwtService.validateToken(jwt, userDetails) && activeSession.isPresent()) {
+                    sessionService.touch(activeSession.get());
+                    request.setAttribute(CURRENT_JTI_ATTRIBUTE, jti);
+
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,

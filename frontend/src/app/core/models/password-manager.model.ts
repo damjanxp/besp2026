@@ -17,3 +17,8 @@ export interface SavePasswordRequest {
   encryptedPassword: string; // Base64 RSA-OAEP encrypted
 }
 
+export interface SharePasswordRequest {
+  targetUserId: number;
+  encryptedPassword: string; // Base64 RSA-OAEP encrypted with target user's public key
+}
+

@@ -28,6 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.StringWriter;
+import com.bsep.pki.model.dto.IssueCertificateRequest;
+import com.bsep.pki.model.entity.RevocationReason;
+import com.bsep.pki.model.entity.UserRole;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
+
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -156,6 +161,7 @@ public class CertificateService {
                     .status(CertificateStatus.ACTIVE)
                     .keystoreAlias(alias)
                     .certificateData(pemData)
+                    .encryptedKeystorePassword(encryptedKeystorePassword)
                     .build();
 
             Certificate savedCert = certificateRepository.save(cert);
@@ -178,6 +184,217 @@ public class CertificateService {
         return java.util.Base64.getEncoder().encodeToString(randomBytes);
     }
 
+    @Transactional
+    public CertificateResponse issueCertificate(IssueCertificateRequest request, User caller) {
+        if (request.getType() == CertificateType.ROOT) {
+            throw new RuntimeException("Use /root endpoint for ROOT certificates");
+        }
+
+        Certificate issuerCert = certificateRepository.findById(request.getIssuerCertificateId())
+                .orElseThrow(() -> new RuntimeException("Issuer certificate not found"));
+
+        if (issuerCert.getStatus() != CertificateStatus.ACTIVE) {
+            throw new RuntimeException("Issuer certificate is not active");
+        }
+        if (issuerCert.getValidTo().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Issuer certificate has expired");
+        }
+        if (issuerCert.getType() == CertificateType.END_ENTITY) {
+            throw new RuntimeException("Cannot use an END_ENTITY certificate as issuer");
+        }
+        if (issuerCert.getEncryptedKeystorePassword() == null) {
+            throw new RuntimeException("Issuer does not have a usable keystore");
+        }
+
+        boolean isAdmin = caller.getRole() == UserRole.ADMIN;
+        if (!isAdmin) {
+            if (caller.getRole() == UserRole.CA_USER) {
+                if (issuerCert.getOwner() == null || !issuerCert.getOwner().getId().equals(caller.getId())) {
+                    throw new RuntimeException("CA users can only issue from their own certificates");
+                }
+            } else {
+                throw new RuntimeException("Access denied");
+            }
+        }
+
+        // Resolve effective owner: ADMIN may delegate a cert to another user via ownerEmail
+        User effectiveOwner = caller;
+        if (isAdmin && request.getOwnerEmail() != null && !request.getOwnerEmail().isBlank()) {
+            effectiveOwner = userRepository.findByEmail(request.getOwnerEmail())
+                    .orElseThrow(() -> new RuntimeException("Target owner not found: " + request.getOwnerEmail()));
+        }
+
+        LocalDateTime newValidTo = LocalDateTime.now().plusDays(request.getValidDays());
+        if (newValidTo.isAfter(issuerCert.getValidTo())) {
+            long maxDays = java.time.temporal.ChronoUnit.DAYS.between(LocalDateTime.now(), issuerCert.getValidTo());
+            throw new RuntimeException("Validity period exceeds issuer validity (max " + maxDays + " days)");
+        }
+
+        String issuerKeystorePassword = keyEncryptionService.decryptPassword(
+                issuerCert.getEncryptedKeystorePassword(),
+                keyEncryptionService.generateUserEncryptionKey(issuerCert.getOwner().getId())
+        );
+        String issuerKeystorePath = resolveKeystorePath(issuerCert.getOwner().getId(), issuerCert.getKeystoreAlias());
+        KeystoreService.KeystoreEntry issuerEntry = keystoreService.loadFromKeystore(
+                issuerCert.getKeystoreAlias(), issuerKeystorePassword, issuerKeystorePath
+        );
+
+        try {
+            int keySize = request.getKeySize() != null ? request.getKeySize() : 2048;
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+            kpg.initialize(keySize, new SecureRandom());
+            KeyPair newKeyPair = kpg.generateKeyPair();
+
+            X500NameBuilder nameBuilder = new X500NameBuilder(BCStyle.INSTANCE);
+            nameBuilder.addRDN(BCStyle.CN, request.getCommonName());
+            nameBuilder.addRDN(BCStyle.O, request.getOrganization());
+            if (notBlank(request.getOrganizationalUnit())) nameBuilder.addRDN(BCStyle.OU, request.getOrganizationalUnit());
+            if (notBlank(request.getCountry())) nameBuilder.addRDN(BCStyle.C, request.getCountry());
+            if (notBlank(request.getState())) nameBuilder.addRDN(BCStyle.ST, request.getState());
+            if (notBlank(request.getLocality())) nameBuilder.addRDN(BCStyle.L, request.getLocality());
+            if (notBlank(request.getEmail())) nameBuilder.addRDN(BCStyle.EmailAddress, request.getEmail());
+            X500Name subjectName = nameBuilder.build();
+
+            X509Certificate issuerX509 = issuerEntry.certificate();
+            X500Name issuerX500Name = new JcaX509CertificateHolder(issuerX509).getSubject();
+
+            BigInteger serialNumber = new BigInteger(64, new SecureRandom());
+            Date notBefore = new Date();
+            Date notAfter = Date.from(newValidTo.toInstant(ZoneOffset.UTC));
+
+            SubjectPublicKeyInfo spki = SubjectPublicKeyInfo.getInstance(newKeyPair.getPublic().getEncoded());
+            X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder(
+                    issuerX500Name, serialNumber, notBefore, notAfter, subjectName, spki
+            );
+
+            JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
+            certBuilder.addExtension(Extension.subjectKeyIdentifier, false,
+                    extUtils.createSubjectKeyIdentifier(newKeyPair.getPublic()));
+            certBuilder.addExtension(Extension.authorityKeyIdentifier, false,
+                    extUtils.createAuthorityKeyIdentifier(issuerX509));
+
+            if (request.getType() == CertificateType.INTERMEDIATE) {
+                certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
+                certBuilder.addExtension(Extension.keyUsage, true,
+                        new KeyUsage(KeyUsage.keyCertSign | KeyUsage.cRLSign));
+            } else {
+                certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
+                certBuilder.addExtension(Extension.keyUsage, true,
+                        new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+            }
+
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption")
+                    .setProvider("BC").build(issuerEntry.privateKey());
+            X509Certificate newX509 = new JcaX509CertificateConverter()
+                    .setProvider("BC").getCertificate(certBuilder.build(signer));
+
+            StringWriter sw = new StringWriter();
+            try (JcaPEMWriter pw = new JcaPEMWriter(sw)) { pw.writeObject(newX509); }
+            String pemData = sw.toString();
+
+            java.security.cert.Certificate[] chain = {newX509, issuerX509};
+
+            String alias = request.getType().name().toLowerCase().replace("_", "-")
+                    + "-" + serialNumber.toString(16).substring(0, 8);
+            String newPassword = generateKeystorePassword();
+            // Save keystore under the effective owner's directory and encrypt with their KEK
+            String newPath = resolveKeystorePath(effectiveOwner.getId(), alias);
+            keystoreService.saveToKeystore(alias, newKeyPair.getPrivate(), newX509, chain, newPassword, newPath);
+
+            String encryptedPassword = keyEncryptionService.encryptPassword(
+                    newPassword,
+                    keyEncryptionService.generateUserEncryptionKey(effectiveOwner.getId())
+            );
+            effectiveOwner.setKeystorePasswordEncrypted(encryptedPassword);
+            userRepository.save(effectiveOwner);
+
+            Certificate saved = certificateRepository.save(Certificate.builder()
+                    .serialNumber(serialNumber.toString())
+                    .type(request.getType())
+                    .commonName(request.getCommonName())
+                    .organization(request.getOrganization())
+                    .issuer(issuerCert)
+                    .owner(effectiveOwner)
+                    .validFrom(LocalDateTime.now())
+                    .validTo(newValidTo)
+                    .status(CertificateStatus.ACTIVE)
+                    .keystoreAlias(alias)
+                    .certificateData(pemData)
+                    .encryptedKeystorePassword(encryptedPassword)
+                    .build());
+
+            return mapToResponse(saved);
+
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to issue certificate: " + e.getMessage(), e);
+        }
+    }
+
+    public List<CertificateResponse> getAvailableIssuers(User caller) {
+        List<Certificate> candidates;
+        if (caller.getRole() == UserRole.ADMIN) {
+            candidates = certificateRepository.findAll();
+        } else {
+            candidates = certificateRepository.findByOwner(caller);
+        }
+        return candidates.stream()
+                .filter(c -> c.getType() != CertificateType.END_ENTITY)
+                .filter(c -> c.getStatus() == CertificateStatus.ACTIVE)
+                .filter(c -> !c.getValidTo().isBefore(LocalDateTime.now()))
+                .filter(c -> c.getEncryptedKeystorePassword() != null)
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    private boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    @Transactional
+    public void revokeCertificate(Long certId, RevocationReason reason, User caller) {
+        Certificate cert = certificateRepository.findById(certId)
+                .orElseThrow(() -> new RuntimeException("Certificate not found"));
+
+        if (cert.getStatus() == CertificateStatus.REVOKED) {
+            throw new RuntimeException("Certificate is already revoked");
+        }
+
+        boolean isAdmin = caller.getRole() == UserRole.ADMIN;
+        boolean isOwner = cert.getOwner() != null && cert.getOwner().getId().equals(caller.getId());
+        boolean isCaUser = caller.getRole() == UserRole.CA_USER;
+        boolean isEndEntity = caller.getRole() == UserRole.END_ENTITY;
+
+        if (!isAdmin) {
+            if (isEndEntity && (!isOwner || cert.getType() != CertificateType.END_ENTITY)) {
+                throw new RuntimeException("Access denied");
+            }
+            if (isCaUser && !isOwner) {
+                throw new RuntimeException("Access denied");
+            }
+        }
+
+        revokeRecursively(cert, reason, caller);
+    }
+
+    private void revokeRecursively(Certificate cert, RevocationReason reason, User revokedBy) {
+        cert.setStatus(CertificateStatus.REVOKED);
+        cert.setRevocationReason(reason);
+        cert.setRevokedAt(LocalDateTime.now());
+        cert.setRevokedBy(revokedBy);
+        certificateRepository.save(cert);
+
+        if (cert.getType() != CertificateType.END_ENTITY) {
+            List<Certificate> issued = certificateRepository.findByIssuer(cert);
+            for (Certificate child : issued) {
+                if (child.getStatus() != CertificateStatus.REVOKED) {
+                    revokeRecursively(child, RevocationReason.CA_COMPROMISE, revokedBy);
+                }
+            }
+        }
+    }
+
     public List<CertificateResponse> getAllCertificates() {
         return certificateRepository.findAll().stream()
                 .map(this::mapToResponse)
@@ -198,6 +415,8 @@ public class CertificateService {
                 .status(cert.getStatus().name())
                 .certificateData(cert.getCertificateData())
                 .createdAt(cert.getCreatedAt())
+                .revocationReason(cert.getRevocationReason() != null ? cert.getRevocationReason().name() : null)
+                .revokedAt(cert.getRevokedAt())
                 .build();
     }
 }

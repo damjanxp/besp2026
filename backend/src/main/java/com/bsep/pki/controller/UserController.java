@@ -3,6 +3,7 @@ package com.bsep.pki.controller;
 import com.bsep.pki.model.dto.SavePublicKeyRequest;
 import com.bsep.pki.model.dto.UserPublicProfileDto;
 import com.bsep.pki.model.entity.User;
+import com.bsep.pki.model.entity.UserRole;
 import com.bsep.pki.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -79,6 +80,20 @@ public class UserController {
     }
 
     /**
+     * List all CA users — used by ADMIN when assigning an issued cert to a CA user.
+     */
+    @GetMapping("/ca-users")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<List<UserPublicProfileDto>> listCaUsers() {
+        List<UserPublicProfileDto> caUsers = userRepository.findAll().stream()
+                .filter(User::isActive)
+                .filter(u -> u.getRole() == UserRole.CA_USER)
+                .map(this::mapToProfile)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(caUsers);
+    }
+
+    /**
      * Retrieve a specific user's public key by their ID.
      * Used when encrypting a password for sharing with a target user.
      */
@@ -105,6 +120,7 @@ public class UserController {
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
+                .role(user.getRole() != null ? user.getRole().name() : null)
                 .publicKeySpki(user.getPublicKeySpki())
                 .build();
     }

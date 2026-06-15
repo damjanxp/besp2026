@@ -7,6 +7,8 @@ import { CertificateListComponent } from './certificates/certificate-list/certif
 import { CertificateFormComponent } from './certificates/certificate-form/certificate-form.component';
 import { PasswordListComponent } from './password-manager/password-list/password-list.component';
 import { CsrUploadComponent } from './csr/csr-upload/csr-upload.component';
+import { SessionListComponent } from './sessions/session-list/session-list.component';
+import { TemplateListComponent } from './templates/template-list/template-list.component';
 import { authGuard } from './shared/guards/auth.guard';
 
 const routes: Routes = [
@@ -17,6 +19,8 @@ const routes: Routes = [
   { path: 'certificates', component: CertificateListComponent, canActivate: [authGuard] },
   { path: 'password-manager', component: PasswordListComponent, canActivate: [authGuard] },
   { path: 'csr-upload', component: CsrUploadComponent, canActivate: [authGuard] },
+  { path: 'sessions', component: SessionListComponent, canActivate: [authGuard] },
+  { path: 'templates', component: TemplateListComponent, canActivate: [authGuard] },
   { path: '', redirectTo: '/login', pathMatch: 'full' },
   { path: '**', redirectTo: '/login' }
 ];

@@ -2,6 +2,8 @@ package com.bsep.pki.controller;
 
 import com.bsep.pki.model.dto.CertificateResponse;
 import com.bsep.pki.model.dto.CreateRootCertificateRequest;
+import com.bsep.pki.model.dto.IssueCertificateRequest;
+import com.bsep.pki.model.dto.RevokeRequest;
 import com.bsep.pki.model.entity.User;
 import com.bsep.pki.repository.UserRepository;
 import com.bsep.pki.service.CertificateService;
@@ -40,6 +42,41 @@ public class CertificateController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<CertificateResponse>> getAllCertificates() {
         return ResponseEntity.ok(certificateService.getAllCertificates());
+    }
+
+    @GetMapping("/issuers")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CA_USER')")
+    public ResponseEntity<List<CertificateResponse>> getAvailableIssuers(Authentication authentication) {
+        String email = authentication.getName();
+        User caller = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return ResponseEntity.ok(certificateService.getAvailableIssuers(caller));
+    }
+
+    @PostMapping("/issue")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CA_USER')")
+    public ResponseEntity<CertificateResponse> issueCertificate(
+            @Valid @RequestBody IssueCertificateRequest request,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        User caller = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return ResponseEntity.ok(certificateService.issueCertificate(request, caller));
+    }
+
+    @PostMapping("/{id}/revoke")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> revokeCertificate(
+            @PathVariable Long id,
+            @RequestBody RevokeRequest request,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        User caller = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        certificateService.revokeCertificate(id, request.getReason(), caller);
+        return ResponseEntity.ok().build();
     }
 }
 

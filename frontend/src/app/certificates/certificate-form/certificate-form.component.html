@@ -1,14 +1,85 @@
-﻿<div class="form-container">
+<div class="form-container">
   <mat-card>
     <mat-card-header>
-      <mat-card-title>Kreiranje Root sertifikata</mat-card-title>
+      <mat-card-title>Kreiranje sertifikata</mat-card-title>
+      <mat-card-subtitle>
+        {{ isAdmin ? 'Administrator — može kreirati sve tipove' : 'CA korisnik — može kreirati Intermediate i End-Entity' }}
+      </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
       <form [formGroup]="certForm" (ngSubmit)="onSubmit()">
+
+        <!-- TIP SERTIFIKATA -->
+        <h3>Tip sertifikata</h3>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Tip</mat-label>
+          <mat-select formControlName="type">
+            <mat-option *ngFor="let t of availableTypes" [value]="t.value">
+              <strong>{{ t.label }}</strong> — {{ t.desc }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- IZDAVAČ (samo za INTERMEDIATE i END_ENTITY) -->
+        <ng-container *ngIf="needsIssuer">
+          <h3>Izdavač (CA koji potpisuje)</h3>
+          <mat-spinner *ngIf="loadingIssuers" diameter="28" style="margin: 8px auto"></mat-spinner>
+
+          <mat-form-field appearance="outline" class="full-width" *ngIf="!loadingIssuers">
+            <mat-label>Izaberi CA sertifikat</mat-label>
+            <mat-select formControlName="issuerId">
+              <mat-option *ngFor="let ca of availableIssuers" [value]="ca.id">
+                [{{ ca.type }}] {{ ca.commonName }} — {{ ca.organization }}
+                (važi do {{ ca.validTo | date:'dd.MM.yyyy' }})
+              </mat-option>
+            </mat-select>
+            <mat-error>Izdavač je obavezan</mat-error>
+          </mat-form-field>
+
+          <mat-card *ngIf="selectedIssuer" class="issuer-info-card">
+            <mat-card-content>
+              <div class="issuer-info-row">
+                <mat-icon color="primary">verified</mat-icon>
+                <span>
+                  <strong>{{ selectedIssuer.commonName }}</strong>
+                  &nbsp;·&nbsp; {{ selectedIssuer.type }}
+                  &nbsp;·&nbsp; Važi do <strong>{{ selectedIssuer.validTo | date:'dd.MM.yyyy' }}</strong>
+                  &nbsp;·&nbsp; Max trajanje novog: <strong>{{ maxValidDays }} dana</strong>
+                </span>
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <div *ngIf="!loadingIssuers && availableIssuers.length === 0" class="no-issuers">
+            <mat-icon color="warn">warning</mat-icon>
+            <span>Nema dostupnih CA sertifikata. Kreiranje ROOT-a je prvi korak.</span>
+          </div>
+        </ng-container>
+
+        <!-- DODJELA VLASNIKA (samo ADMIN, za INTERMEDIATE i END_ENTITY) -->
+        <ng-container *ngIf="showOwnerDropdown">
+          <h3>Dodjela vlasnika sertifikata</h3>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Dodjeli CA korisniku (opcionalno)</mat-label>
+            <mat-select formControlName="ownerEmail">
+              <mat-option [value]="null">— Ostavi vlasniku: admin (ja) —</mat-option>
+              <mat-option *ngFor="let u of caUsers" [value]="u.email">
+                {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
+              </mat-option>
+            </mat-select>
+            <mat-hint>Ako ostaviš prazno, sertifikat će biti dodijeljen tebi (admin). Dodjeli CA korisniku da mogu koristiti sertifikat za izdavanje.</mat-hint>
+          </mat-form-field>
+          <div *ngIf="caUsers.length === 0 && !loadingCaUsers" class="no-issuers">
+            <mat-icon>info</mat-icon>
+            <span>Nema registrovanih CA korisnika. Sertifikat će biti dodijeljen adminu.</span>
+          </div>
+        </ng-container>
+
+        <!-- X.500 PODACI O SUBJEKTU -->
         <h3>X.500 Podaci o subjektu</h3>
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Common Name (CN)</mat-label>
-          <input matInput formControlName="commonName" placeholder="npr. My Root CA">
+          <input matInput formControlName="commonName" placeholder="npr. My Intermediate CA">
           <mat-error>Common Name je obavezan</mat-error>
         </mat-form-field>
         <mat-form-field appearance="outline" class="full-width">
@@ -20,45 +91,64 @@
           <mat-label>Organizaciona jedinica (OU)</mat-label>
           <input matInput formControlName="organizationalUnit">
         </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Drzava (C)</mat-label>
-          <input matInput formControlName="country" placeholder="npr. RS" maxlength="2">
-          <mat-error *ngIf="certForm.get('country')?.hasError('required')">Drzava je obavezna</mat-error>
-          <mat-error *ngIf="certForm.get('country')?.hasError('pattern')">Tacno 2 velika slova (npr. RS)</mat-error>
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Pokrajina / Staat (ST)</mat-label>
-          <input matInput formControlName="state">
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Grad (L)</mat-label>
-          <input matInput formControlName="locality">
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Email</mat-label>
-          <input matInput type="email" formControlName="email">
-          <mat-error>Unesite validan email</mat-error>
-        </mat-form-field>
-        <h3>Podesavanja sertifikata</h3>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Vaznost (dani)</mat-label>
-          <input matInput type="number" formControlName="validDays">
-          <mat-hint *ngIf="expiryDate">Istice: {{ expiryDate | date:'dd.MM.yyyy' }}</mat-hint>
-          <mat-error>Unesite broj izmedju 1 i 3650</mat-error>
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Velicina kljuca (bits)</mat-label>
-          <mat-select formControlName="keySize">
-            <mat-option [value]="2048">2048</mat-option>
-            <mat-option [value]="4096">4096</mat-option>
-          </mat-select>
-        </mat-form-field>
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Država (C)</mat-label>
+            <input matInput formControlName="country" placeholder="RS" maxlength="2">
+            <mat-error *ngIf="certForm.get('country')?.hasError('required')">Obavezno</mat-error>
+            <mat-error *ngIf="certForm.get('country')?.hasError('pattern')">Tačno 2 velika slova</mat-error>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Pokrajina (ST)</mat-label>
+            <input matInput formControlName="state">
+          </mat-form-field>
+        </div>
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Grad (L)</mat-label>
+            <input matInput formControlName="locality">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Email</mat-label>
+            <input matInput type="email" formControlName="email">
+            <mat-error>Unesite validan email</mat-error>
+          </mat-form-field>
+        </div>
+
+        <!-- PODEŠAVANJA -->
+        <h3>Podešavanja sertifikata</h3>
+        <div class="row-2">
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Važnost (dani)</mat-label>
+            <input matInput type="number" formControlName="validDays" [max]="maxValidDays">
+            <mat-hint *ngIf="expiryDate">Ističe: {{ expiryDate | date:'dd.MM.yyyy' }}</mat-hint>
+            <mat-hint *ngIf="needsIssuer && selectedIssuer">
+              Maksimum: {{ maxValidDays }} dana (ograničeno izdavačem)
+            </mat-hint>
+            <mat-error>Unesite broj od 1 do {{ maxValidDays }}</mat-error>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="half-width">
+            <mat-label>Veličina ključa (bits)</mat-label>
+            <mat-select formControlName="keySize">
+              <mat-option [value]="2048">2048 (preporučeno)</mat-option>
+              <mat-option [value]="4096">4096 (sigurnije, sporije)</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
         <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+
         <div class="button-row">
-          <button mat-raised-button color="primary" type="submit" class="full-width"
-                  [disabled]="certForm.invalid || isLoading">
+          <button mat-button type="button" (click)="goBack()">
+            Otkaži
+          </button>
+          <button mat-raised-button color="primary" type="submit"
+                  [disabled]="certForm.invalid || isLoading ||
+                              (needsIssuer && availableIssuers.length === 0)">
             <mat-spinner *ngIf="isLoading" diameter="20" class="inline-spinner"></mat-spinner>
-            <span *ngIf="!isLoading">Kreiraj Root sertifikat</span>
+            <span *ngIf="!isLoading">
+              {{ certForm.get('type')?.value === 'ROOT' ? 'Kreiraj Root sertifikat' : 'Izdaj sertifikat' }}
+            </span>
           </button>
         </div>
       </form>

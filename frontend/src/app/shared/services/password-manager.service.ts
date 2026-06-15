@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { PasswordEntry, SavePasswordRequest } from '../../core/models/password-manager.model';
+import { PasswordEntry, SavePasswordRequest, SharePasswordRequest } from '../../core/models/password-manager.model';
 
 export interface UserPublicProfile {
   id: number;
@@ -28,6 +28,11 @@ export class PasswordManagerService {
 
   deletePassword(id: number): Observable<void> {
     return this.http.delete<void>(`${this.API_URL}/${id}`);
+  }
+
+  /** Share a password entry with another user (re-encrypted with their public key). */
+  sharePassword(entryId: number, request: SharePasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.API_URL}/${entryId}/share`, request);
   }
 
   /** Save the user's RSA public key (SPKI PEM) to the server. */

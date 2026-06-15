@@ -57,6 +57,20 @@ public class Certificate {
     @Column(columnDefinition = "TEXT")
     private String certificateData;
 
+    @Column(columnDefinition = "TEXT")
+    private String encryptedKeystorePassword;
+
+    @Enumerated(EnumType.STRING)
+    @Column
+    private RevocationReason revocationReason;
+
+    @Column
+    private LocalDateTime revokedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "revoked_by_id")
+    private User revokedBy;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -25,5 +25,7 @@ public class CertificateResponse {
     private String status;
     private String certificateData;
     private LocalDateTime createdAt;
+    private String revocationReason;
+    private LocalDateTime revokedAt;
 }
 
