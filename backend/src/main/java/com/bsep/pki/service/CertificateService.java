@@ -452,32 +452,33 @@ public class CertificateService {
             return cert.getOwner() != null && cert.getOwner().getId().equals(user.getId());
         }
         if (user.getRole() == UserRole.CA_USER) {
-            List<Certificate> roots = certificateRepository.findByOwnerAndType(user, CertificateType.ROOT);
-            if (roots.isEmpty()) {
-                return false;
-            }
-            Set<Long> rootIds = roots.stream().map(Certificate::getId).collect(Collectors.toSet());
-            return isInCaChain(cert, rootIds);
+            Set<Long> ownedIds = getOwnedCertIds(user);
+            return !ownedIds.isEmpty() && isInCaChain(cert, ownedIds);
         }
         return false;
     }
 
     private List<Certificate> filterCertificatesForCaUser(User user, List<Certificate> certificates) {
-        List<Certificate> roots = certificateRepository.findByOwnerAndType(user, CertificateType.ROOT);
-        if (roots.isEmpty()) {
+        Set<Long> ownedIds = getOwnedCertIds(user);
+        if (ownedIds.isEmpty()) {
             return Collections.emptyList();
         }
-        Set<Long> rootIds = roots.stream().map(Certificate::getId).collect(Collectors.toSet());
         return certificates.stream()
-                .filter(cert -> isInCaChain(cert, rootIds))
+                .filter(cert -> isInCaChain(cert, ownedIds))
                 .collect(Collectors.toList());
     }
 
-    private boolean isInCaChain(Certificate cert, Set<Long> rootIds) {
+    private Set<Long> getOwnedCertIds(User user) {
+        return certificateRepository.findByOwner(user).stream()
+                .map(Certificate::getId)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean isInCaChain(Certificate cert, Set<Long> ownedCertIds) {
         Set<Long> visited = new HashSet<>();
         Certificate current = cert;
         while (current != null && current.getId() != null && visited.add(current.getId())) {
-            if (rootIds.contains(current.getId())) {
+            if (ownedCertIds.contains(current.getId())) {
                 return true;
             }
             current = current.getIssuer();
