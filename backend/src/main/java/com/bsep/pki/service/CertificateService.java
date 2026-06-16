@@ -19,9 +19,13 @@ import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.CRLDistPoint;
 import org.bouncycastle.asn1.x509.DistributionPoint;
 import org.bouncycastle.asn1.x509.DistributionPointName;
+import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.ASN1EncodableVector;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -38,8 +42,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayInputStream;
 import java.io.StringWriter;
 import com.bsep.pki.model.dto.IssueCertificateRequest;
+import com.bsep.pki.model.entity.CertificateTemplate;
 import com.bsep.pki.model.entity.RevocationReason;
 import com.bsep.pki.model.entity.UserRole;
+import com.bsep.pki.repository.CertificateTemplateRepository;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 
 import java.math.BigInteger;
@@ -74,6 +80,7 @@ public class CertificateService {
     private final KeystoreService keystoreService;
     private final KeyEncryptionService keyEncryptionService;
     private final com.bsep.pki.repository.UserRepository userRepository;
+    private final CertificateTemplateRepository templateRepository;
 
     @Value("${app.keystore.dir}")
     private String keystoreDir;
@@ -259,6 +266,28 @@ public class CertificateService {
             throw new RuntimeException("Validity period exceeds issuer validity (max " + maxDays + " days)");
         }
 
+        if (request.getTemplateId() != null) {
+            CertificateTemplate template = templateRepository.findById(request.getTemplateId())
+                    .orElseThrow(() -> new RuntimeException("Template not found"));
+            if (!template.getCaIssuer().getId().equals(issuerCert.getId())) {
+                throw new RuntimeException("Template is not configured for this issuer");
+            }
+            if (notBlank(template.getCnRegex()) && !request.getCommonName().matches(template.getCnRegex())) {
+                throw new RuntimeException("CN '" + request.getCommonName() + "' does not match template constraint: " + template.getCnRegex());
+            }
+            if (notBlank(template.getSanRegex()) && notBlank(request.getSan())) {
+                for (String sanEntry : request.getSan().split(",")) {
+                    String sanValue = sanEntry.trim();
+                    if (!sanValue.isEmpty() && !sanValue.matches(template.getSanRegex())) {
+                        throw new RuntimeException("SAN '" + sanValue + "' does not match template constraint: " + template.getSanRegex());
+                    }
+                }
+            }
+            if (template.getMaxTtlDays() != null && request.getValidDays() > template.getMaxTtlDays()) {
+                throw new RuntimeException("Validity period exceeds template maximum of " + template.getMaxTtlDays() + " days");
+            }
+        }
+
         String issuerKeystorePassword = keyEncryptionService.decryptPassword(
                 issuerCert.getEncryptedKeystorePassword(),
                 keyEncryptionService.generateUserEncryptionKey(issuerCert.getOwner().getId())
@@ -311,12 +340,30 @@ public class CertificateService {
 
             if (request.getType() == CertificateType.INTERMEDIATE) {
                 certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
-                certBuilder.addExtension(Extension.keyUsage, true,
-                        new KeyUsage(KeyUsage.keyCertSign | KeyUsage.cRLSign));
+                int kuBits = notBlank(request.getKeyUsage())
+                        ? parseKeyUsageBits(request.getKeyUsage())
+                        : KeyUsage.keyCertSign | KeyUsage.cRLSign;
+                certBuilder.addExtension(Extension.keyUsage, true, new KeyUsage(kuBits));
             } else {
                 certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(false));
-                certBuilder.addExtension(Extension.keyUsage, true,
-                        new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+                int kuBits = notBlank(request.getKeyUsage())
+                        ? parseKeyUsageBits(request.getKeyUsage())
+                        : KeyUsage.digitalSignature | KeyUsage.keyEncipherment;
+                certBuilder.addExtension(Extension.keyUsage, true, new KeyUsage(kuBits));
+            }
+
+            if (notBlank(request.getSan())) {
+                GeneralNames sans = parseSan(request.getSan());
+                if (sans != null) {
+                    certBuilder.addExtension(Extension.subjectAlternativeName, false, sans);
+                }
+            }
+
+            if (notBlank(request.getExtendedKeyUsage())) {
+                ExtendedKeyUsage eku = buildExtendedKeyUsage(request.getExtendedKeyUsage());
+                if (eku != null) {
+                    certBuilder.addExtension(Extension.extendedKeyUsage, false, eku);
+                }
             }
 
             ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption")
@@ -639,6 +686,64 @@ public class CertificateService {
             }
         }
         return names;
+    }
+
+    private int parseKeyUsageBits(String keyUsageStr) {
+        int bits = 0;
+        for (String ku : keyUsageStr.split(",")) {
+            bits |= switch (ku.trim()) {
+                case "digitalSignature" -> KeyUsage.digitalSignature;
+                case "nonRepudiation"   -> KeyUsage.nonRepudiation;
+                case "keyEncipherment"  -> KeyUsage.keyEncipherment;
+                case "dataEncipherment" -> KeyUsage.dataEncipherment;
+                case "keyAgreement"     -> KeyUsage.keyAgreement;
+                case "keyCertSign"      -> KeyUsage.keyCertSign;
+                case "cRLSign"          -> KeyUsage.cRLSign;
+                case "encipherOnly"     -> KeyUsage.encipherOnly;
+                case "decipherOnly"     -> KeyUsage.decipherOnly;
+                default -> 0;
+            };
+        }
+        return bits;
+    }
+
+    private ExtendedKeyUsage buildExtendedKeyUsage(String ekuStr) {
+        ASN1EncodableVector v = new ASN1EncodableVector();
+        for (String eku : ekuStr.split(",")) {
+            String oid = switch (eku.trim()) {
+                case "serverAuth"      -> "1.3.6.1.5.5.7.3.1";
+                case "clientAuth"      -> "1.3.6.1.5.5.7.3.2";
+                case "codeSigning"     -> "1.3.6.1.5.5.7.3.3";
+                case "emailProtection" -> "1.3.6.1.5.5.7.3.4";
+                case "timeStamping"    -> "1.3.6.1.5.5.7.3.8";
+                case "OCSPSigning"     -> "1.3.6.1.5.5.7.3.9";
+                default -> null;
+            };
+            if (oid != null) v.add(new ASN1ObjectIdentifier(oid));
+        }
+        if (v.size() == 0) return null;
+        return ExtendedKeyUsage.getInstance(new DERSequence(v));
+    }
+
+    private GeneralNames parseSan(String sanStr) {
+        List<GeneralName> names = new ArrayList<>();
+        for (String entry : sanStr.split(",")) {
+            String san = entry.trim();
+            if (san.isEmpty()) continue;
+            if (san.startsWith("DNS:")) {
+                names.add(new GeneralName(GeneralName.dNSName, san.substring(4)));
+            } else if (san.startsWith("IP:")) {
+                names.add(new GeneralName(GeneralName.iPAddress, san.substring(3)));
+            } else if (san.startsWith("email:") || san.startsWith("EMAIL:")) {
+                names.add(new GeneralName(GeneralName.rfc822Name, san.substring(san.indexOf(':') + 1)));
+            } else if (san.startsWith("URI:")) {
+                names.add(new GeneralName(GeneralName.uniformResourceIdentifier, san.substring(4)));
+            } else {
+                names.add(new GeneralName(GeneralName.dNSName, san));
+            }
+        }
+        if (names.isEmpty()) return null;
+        return new GeneralNames(names.toArray(new GeneralName[0]));
     }
 
     @Transactional(readOnly = true)

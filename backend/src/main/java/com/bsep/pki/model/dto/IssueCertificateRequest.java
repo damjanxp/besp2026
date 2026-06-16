@@ -41,4 +41,15 @@ public class IssueCertificateRequest {
     /** ADMIN only: if set, this user becomes the certificate owner instead of the caller. */
     @Email
     private String ownerEmail;
+
+    private Long templateId;
+
+    /** Comma-separated SANs, e.g. "DNS:example.com,DNS:*.example.com,IP:1.2.3.4" */
+    private String san;
+
+    /** Comma-separated Key Usage bits, e.g. "digitalSignature,keyEncipherment" */
+    private String keyUsage;
+
+    /** Comma-separated Extended Key Usage OIDs, e.g. "serverAuth,clientAuth" */
+    private String extendedKeyUsage;
 }

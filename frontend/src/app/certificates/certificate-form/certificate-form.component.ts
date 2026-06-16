@@ -4,7 +4,9 @@ import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CertificateService } from '../../shared/services/certificate.service';
 import { AuthService } from '../../shared/services/auth.service';
+import { TemplateService } from '../../shared/services/template.service';
 import { CertificateResponse, UserProfile } from '../../core/models/certificate.model';
+import { TemplateResponse } from '../../core/models/template.model';
 
 @Component({
   selector: 'app-certificate-form',
@@ -28,9 +30,26 @@ export class CertificateFormComponent implements OnInit {
   endEntityUsers: UserProfile[] = [];
   loadingEndEntityUsers = false;
 
+  availableTemplates: TemplateResponse[] = [];
+  loadingTemplates = false;
+  activeTemplate: TemplateResponse | null = null;
+  issuerMaxValidDays = 3650;
+
+  readonly KEY_USAGE_OPTIONS = [
+    'digitalSignature', 'nonRepudiation', 'keyEncipherment',
+    'dataEncipherment', 'keyAgreement', 'keyCertSign', 'cRLSign',
+    'encipherOnly', 'decipherOnly'
+  ];
+
+  readonly EKU_OPTIONS = [
+    'serverAuth', 'clientAuth', 'codeSigning',
+    'emailProtection', 'timeStamping', 'OCSPSigning'
+  ];
+
   constructor(
     private fb: FormBuilder,
     private certificateService: CertificateService,
+    private templateService: TemplateService,
     private authService: AuthService,
     private router: Router,
     private snackBar: MatSnackBar
@@ -64,6 +83,7 @@ export class CertificateFormComponent implements OnInit {
     this.certForm = this.fb.group({
       type:                [defaultType, Validators.required],
       issuerId:            [null],
+      templateId:          [null],
       ownerEmail:          [null],
       commonName:          ['', Validators.required],
       organization:        ['', Validators.required],
@@ -72,6 +92,9 @@ export class CertificateFormComponent implements OnInit {
       state:               [''],
       locality:            [''],
       email:               ['', Validators.email],
+      san:                 [''],
+      keyUsage:            [[]],
+      extendedKeyUsage:    [[]],
       validDays:           [365, [Validators.required, Validators.min(1), Validators.max(3650)]],
       keySize:             [2048]
     });
@@ -83,6 +106,7 @@ export class CertificateFormComponent implements OnInit {
 
     this.certForm.get('type')!.valueChanges.subscribe(t => this.onTypeChange(t));
     this.certForm.get('issuerId')!.valueChanges.subscribe(id => this.onIssuerChange(id));
+    this.certForm.get('templateId')!.valueChanges.subscribe(id => this.onTemplateChange(id));
     this.certForm.get('validDays')!.valueChanges.subscribe(d => this.updateExpiryDate(d));
 
     this.onTypeChange(defaultType);
@@ -187,16 +211,61 @@ export class CertificateFormComponent implements OnInit {
   }
 
   onIssuerChange(issuerId: number | null): void {
+    this.availableTemplates = [];
+    this.activeTemplate = null;
+    this.certForm.get('templateId')!.setValue(null, { emitEvent: false });
+
     if (!issuerId) return;
     const issuer = this.availableIssuers.find(i => i.id === issuerId);
     if (!issuer) return;
     const msLeft = new Date(issuer.validTo).getTime() - Date.now();
     const daysLeft = Math.max(1, Math.floor(msLeft / 86400000));
+    this.issuerMaxValidDays = daysLeft;
     this.maxValidDays = daysLeft;
     this.updateValidDaysMax(daysLeft);
     const cur = this.certForm.get('validDays')!.value;
     if (cur > daysLeft) this.certForm.get('validDays')!.setValue(daysLeft);
     this.updateExpiryDate(this.certForm.get('validDays')!.value);
+
+    if (this.isAdmin || this.isCaUser) {
+      this.loadTemplatesForIssuer(issuerId);
+    }
+  }
+
+  loadTemplatesForIssuer(caId: number): void {
+    this.loadingTemplates = true;
+    this.templateService.getTemplatesForCa(caId).subscribe({
+      next: (templates) => { this.availableTemplates = templates; this.loadingTemplates = false; },
+      error: () => { this.loadingTemplates = false; }
+    });
+  }
+
+  onTemplateChange(templateId: number | null): void {
+    if (!templateId) {
+      this.activeTemplate = null;
+      this.maxValidDays = this.issuerMaxValidDays;
+      this.updateValidDaysMax(this.issuerMaxValidDays);
+      return;
+    }
+    this.activeTemplate = this.availableTemplates.find(t => t.id === templateId) ?? null;
+    if (!this.activeTemplate) return;
+
+    if (this.activeTemplate.defaultKeyUsage) {
+      const kuArray = this.activeTemplate.defaultKeyUsage.split(',').map(k => k.trim()).filter(Boolean);
+      this.certForm.get('keyUsage')!.setValue(kuArray, { emitEvent: false });
+    }
+    if (this.activeTemplate.defaultExtendedKeyUsage) {
+      const ekuArray = this.activeTemplate.defaultExtendedKeyUsage.split(',').map(k => k.trim()).filter(Boolean);
+      this.certForm.get('extendedKeyUsage')!.setValue(ekuArray, { emitEvent: false });
+    }
+    if (this.activeTemplate.maxTtlDays) {
+      const capped = Math.min(this.issuerMaxValidDays, this.activeTemplate.maxTtlDays);
+      this.maxValidDays = capped;
+      this.updateValidDaysMax(capped);
+      const cur = this.certForm.get('validDays')!.value;
+      if (cur > capped) this.certForm.get('validDays')!.setValue(capped);
+      this.updateExpiryDate(this.certForm.get('validDays')!.value);
+    }
   }
 
   updateValidDaysMax(max: number): void {
@@ -259,7 +328,11 @@ export class CertificateFormComponent implements OnInit {
         email: v.email || undefined,
         validDays: v.validDays,
         keySize: v.keySize,
-        ownerEmail: v.ownerEmail || undefined
+        ownerEmail: v.ownerEmail || undefined,
+        templateId: v.templateId || undefined,
+        san: v.san || undefined,
+        keyUsage: Array.isArray(v.keyUsage) && v.keyUsage.length > 0 ? v.keyUsage.join(',') : undefined,
+        extendedKeyUsage: Array.isArray(v.extendedKeyUsage) && v.extendedKeyUsage.length > 0 ? v.extendedKeyUsage.join(',') : undefined
       }).subscribe({
         next: () => {
           this.snackBar.open('Sertifikat uspješno izdat!', 'OK', { duration: 4000 });

@@ -23,6 +23,10 @@ export interface IssueCertificateRequest {
   validDays: number;
   keySize: number;
   ownerEmail?: string;
+  templateId?: number;
+  san?: string;
+  keyUsage?: string;
+  extendedKeyUsage?: string;
 }
 
 export interface UserProfile {

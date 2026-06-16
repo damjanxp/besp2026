@@ -56,6 +56,41 @@
           </div>
         </ng-container>
 
+        <!-- ŠABLON (samo kad je odabran izdavač i korisnik je CA/ADMIN) -->
+        <ng-container *ngIf="needsIssuer && selectedIssuer && (isAdmin || isCaUser)">
+          <h3>Šablon sertifikata (opcionalno)</h3>
+          <mat-spinner *ngIf="loadingTemplates" diameter="28" style="margin: 8px auto"></mat-spinner>
+          <ng-container *ngIf="!loadingTemplates">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Izaberi šablon</mat-label>
+              <mat-select formControlName="templateId">
+                <mat-option [value]="null">— Bez šablona —</mat-option>
+                <mat-option *ngFor="let t of availableTemplates" [value]="t.id">
+                  {{ t.name }}
+                  <ng-container *ngIf="t.maxTtlDays"> · maks. {{ t.maxTtlDays }} dana</ng-container>
+                </mat-option>
+              </mat-select>
+              <mat-hint *ngIf="availableTemplates.length === 0">Nema definisanih šablona za ovog izdavača</mat-hint>
+            </mat-form-field>
+
+            <mat-card *ngIf="activeTemplate" class="template-info-card">
+              <mat-card-content>
+                <div class="template-info-row">
+                  <mat-icon color="accent">auto_awesome</mat-icon>
+                  <div>
+                    <strong>{{ activeTemplate.name }}</strong> — forma je popunjena podrazumijevanim vrijednostima
+                    <div class="template-constraints">
+                      <span *ngIf="activeTemplate.cnRegex">CN regex: <code>{{ activeTemplate.cnRegex }}</code></span>
+                      <span *ngIf="activeTemplate.sanRegex">SAN regex: <code>{{ activeTemplate.sanRegex }}</code></span>
+                      <span *ngIf="activeTemplate.maxTtlDays">Maks. trajanje: <strong>{{ activeTemplate.maxTtlDays }} dana</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </mat-card-content>
+            </mat-card>
+          </ng-container>
+        </ng-container>
+
         <!-- DODJELA VLASNIKA (ADMIN za sve tipove osim ROOT; CA korisnik samo za END_ENTITY) -->
         <ng-container *ngIf="showOwnerDropdown">
           <h3>Dodjela vlasnika sertifikata</h3>
@@ -81,6 +116,7 @@
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Common Name (CN)</mat-label>
           <input matInput formControlName="commonName" placeholder="npr. My Intermediate CA">
+          <mat-hint *ngIf="activeTemplate?.cnRegex">Mora odgovarati: <code>{{ activeTemplate!.cnRegex }}</code></mat-hint>
           <mat-error>Common Name je obavezan</mat-error>
         </mat-form-field>
         <mat-form-field appearance="outline" class="full-width">
@@ -115,6 +151,34 @@
             <mat-error>Unesite validan email</mat-error>
           </mat-form-field>
         </div>
+
+        <!-- EKSTENZIJE (samo za INTERMEDIATE i END_ENTITY) -->
+        <ng-container *ngIf="needsIssuer">
+          <h3>Ekstenzije sertifikata</h3>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Subject Alternative Names (SAN)</mat-label>
+            <input matInput formControlName="san"
+                   placeholder="npr. DNS:example.com,DNS:*.example.com,IP:1.2.3.4">
+            <mat-hint *ngIf="activeTemplate?.sanRegex">Svaki SAN mora odgovarati: <code>{{ activeTemplate!.sanRegex }}</code></mat-hint>
+            <mat-hint *ngIf="!activeTemplate?.sanRegex">Odvojeno zarezom. Prefiksi: DNS:, IP:, email:, URI:</mat-hint>
+          </mat-form-field>
+          <div class="row-2">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Key Usage</mat-label>
+              <mat-select formControlName="keyUsage" multiple>
+                <mat-option *ngFor="let ku of KEY_USAGE_OPTIONS" [value]="ku">{{ ku }}</mat-option>
+              </mat-select>
+              <mat-hint>Ostavite prazno za podrazumijevane vrijednosti</mat-hint>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Extended Key Usage</mat-label>
+              <mat-select formControlName="extendedKeyUsage" multiple>
+                <mat-option *ngFor="let eku of EKU_OPTIONS" [value]="eku">{{ eku }}</mat-option>
+              </mat-select>
+              <mat-hint>Ostavite prazno za bez EKU</mat-hint>
+            </mat-form-field>
+          </div>
+        </ng-container>
 
         <!-- PODEŠAVANJA -->
         <h3>Podešavanja sertifikata</h3>
