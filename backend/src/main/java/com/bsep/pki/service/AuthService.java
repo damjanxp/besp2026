@@ -35,6 +35,8 @@ import java.util.UUID;
 @Slf4j
 public class AuthService {
 
+    private static final org.slf4j.Logger AUDIT = org.slf4j.LoggerFactory.getLogger("SECURITY_AUDIT");
+
     private final UserRepository userRepository;
     private final ActivationTokenRepository activationTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -55,8 +57,7 @@ public class AuthService {
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            // Generic message — ne otkrivamo da email vec postoji (OWASP)
-            log.warn("Registration attempt with existing email: {}", request.getEmail());
+            AUDIT.warn("REGISTRATION_DUPLICATE email={}", request.getEmail());
             return;
         }
 
@@ -109,6 +110,7 @@ public class AuthService {
 
         userRepository.save(user);
         activationTokenRepository.save(activationToken);
+        AUDIT.info("ACCOUNT_ACTIVATED email={}", user.getEmail());
     }
 
     public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
@@ -118,12 +120,12 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!user.isActive()) {
-            log.warn("Login attempt on inactive account: {}", request.getEmail());
+            AUDIT.warn("LOGIN_INACTIVE email={}", request.getEmail());
             throw new RuntimeException("Nalog nije aktiviran. Molimo proverite vaš email i kliknite na aktivacioni link.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            log.warn("Failed login attempt for: {}", request.getEmail());
+            AUDIT.warn("LOGIN_FAILED email={}", request.getEmail());
             throw new RuntimeException("Invalid credentials");
         }
 
@@ -133,6 +135,7 @@ public class AuthService {
         String jti = jwtService.extractJti(token);
         sessionService.createSession(user, jti, ipAddress, userAgent, jwtService.getExpirationMs());
 
+        AUDIT.info("LOGIN_SUCCESS email={} role={}", user.getEmail(), user.getRole());
         return AuthResponse.builder()
                 .token(token)
                 .email(user.getEmail())
@@ -215,5 +218,6 @@ public class AuthService {
                 .findByUserAndRevokedFalseAndExpiresAtAfter(user, LocalDateTime.now());
         activeSessions.forEach(session -> session.setRevoked(true));
         userSessionRepository.saveAll(activeSessions);
+        AUDIT.info("PASSWORD_RESET email={} sessionsRevoked={}", user.getEmail(), activeSessions.size());
     }
 }

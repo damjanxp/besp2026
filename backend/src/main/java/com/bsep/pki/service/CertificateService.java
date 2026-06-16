@@ -76,6 +76,8 @@ import org.springframework.security.access.AccessDeniedException;
 @Slf4j
 public class CertificateService {
 
+    private static final org.slf4j.Logger AUDIT = org.slf4j.LoggerFactory.getLogger("SECURITY_AUDIT");
+
     private final CertificateRepository certificateRepository;
     private final KeystoreService keystoreService;
     private final KeyEncryptionService keyEncryptionService;
@@ -196,6 +198,9 @@ public class CertificateService {
                     .build();
 
             Certificate savedCert = certificateRepository.save(cert);
+
+            AUDIT.info("CERT_GENERATED type=ROOT serial={} cn={} owner={}",
+                    serialNumber, request.getCommonName(), adminUser.getEmail());
 
             // k) Return response
             return mapToResponse(savedCert);
@@ -406,6 +411,11 @@ public class CertificateService {
                     .encryptedKeystorePassword(encryptedPassword)
                     .build());
 
+            AUDIT.info("CERT_ISSUED type={} serial={} cn={} issuer={} owner={} issuedBy={}",
+                    request.getType(), serialNumber, request.getCommonName(),
+                    issuerCert.getCommonName(), effectiveOwner.getEmail(),
+                    caller.getEmail());
+
             return mapToResponse(saved);
 
         } catch (RuntimeException e) {
@@ -467,6 +477,8 @@ public class CertificateService {
         cert.setRevokedAt(LocalDateTime.now());
         cert.setRevokedBy(revokedBy);
         certificateRepository.save(cert);
+        AUDIT.warn("CERT_REVOKED serial={} cn={} type={} reason={} revokedBy={}",
+                cert.getSerialNumber(), cert.getCommonName(), cert.getType(), reason, revokedBy.getEmail());
 
         if (cert.getType() != CertificateType.END_ENTITY) {
             List<Certificate> issued = certificateRepository.findByIssuer(cert);

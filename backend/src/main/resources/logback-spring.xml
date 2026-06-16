@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <property name="LOG_DIR" value="logs"/>
+    <!-- Every line carries: timestamp  level  [requestId]  [userEmail]  [clientIp]  logger - message -->
+    <property name="PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:--}] [%X{userEmail:-anonymous}] [%X{clientIp:--}] %logger{35} - %msg%n"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         CONSOLE  (always on)
+    ════════════════════════════════════════════════════ -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPLICATION LOG  –  all INFO+ events
+         Rotates: daily or when file reaches 10 MB
+         Retention: 30 days / 300 MB total
+    ════════════════════════════════════════════════════ -->
+    <appender name="APP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/pki-app.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/pki-app.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>300MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════
+         SECURITY AUDIT LOG  –  focused audit trail
+         Receives events from the SECURITY_AUDIT named logger.
+         Rotates: daily or 10 MB   Retention: 90 days / 500 MB
+    ════════════════════════════════════════════════════ -->
+    <appender name="SECURITY_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/pki-security.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/pki-security.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ═══════════════════════════════════════════════════
+         SECURITY_AUDIT named logger
+         additivity=true  →  events also flow to root (APP_FILE + CONSOLE)
+         so pki-app.log contains everything, pki-security.log is the focused trail
+    ════════════════════════════════════════════════════ -->
+    <logger name="SECURITY_AUDIT" level="INFO" additivity="true">
+        <appender-ref ref="SECURITY_FILE"/>
+    </logger>
+
+    <!-- ═══════════════════════════════════════════════════
+         Suppress framework noise
+    ════════════════════════════════════════════════════ -->
+    <logger name="org.springframework"          level="WARN"/>
+    <logger name="org.hibernate.SQL"            level="WARN"/>
+    <logger name="org.hibernate.orm"            level="WARN"/>
+    <logger name="com.zaxxer.hikari"            level="WARN"/>
+    <logger name="org.springframework.security" level="WARN"/>
+
+    <!-- Our application code at INFO -->
+    <logger name="com.bsep.pki" level="INFO"/>
+
+    <!-- Root: console + app file for everything not overridden above -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="APP_FILE"/>
+    </root>
+
+</configuration>

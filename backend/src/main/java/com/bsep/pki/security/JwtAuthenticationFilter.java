@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,7 +21,10 @@ import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final org.slf4j.Logger AUDIT = org.slf4j.LoggerFactory.getLogger("SECURITY_AUDIT");
 
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
@@ -58,7 +62,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
                 Optional<UserSession> activeSession = sessionService.findValid(jti);
-                if (jwtService.validateToken(jwt, userDetails) && activeSession.isPresent()) {
+                boolean tokenValid = jwtService.validateToken(jwt, userDetails);
+                if (tokenValid && activeSession.isPresent()) {
                     sessionService.touch(activeSession.get());
                     request.setAttribute(CURRENT_JTI_ATTRIBUTE, jti);
 
@@ -70,10 +75,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else if (tokenValid) {
+                    AUDIT.warn("JWT_SESSION_REVOKED jti={} path={}", jti, request.getServletPath());
                 }
             }
         } catch (Exception e) {
-            // Invalid token — just continue without setting authentication
+            AUDIT.warn("JWT_VALIDATION_FAILURE reason={} path={}", e.getClass().getSimpleName(), request.getServletPath());
         }
 
         filterChain.doFilter(request, response);

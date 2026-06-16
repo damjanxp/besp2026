@@ -55,6 +55,8 @@ import java.util.Date;
 @Slf4j
 public class CsrService {
 
+    private static final org.slf4j.Logger AUDIT = org.slf4j.LoggerFactory.getLogger("SECURITY_AUDIT");
+
     private static final long MAX_SIZE = 10 * 1024; // 10 KB
 
     public void validateCsrFile(MultipartFile file) {
@@ -334,7 +336,11 @@ public class CsrService {
                     .certificateData(pemData)
                     .build();
 
-            return certificateRepository.save(newCert);
+            Certificate saved = certificateRepository.save(newCert);
+            AUDIT.info("CSR_SIGNED serial={} cn={} issuer={} requestedBy={}",
+                    serialNumber, commonName != null ? commonName : "Unknown",
+                    caCert.getCommonName(), requester.getEmail());
+            return saved;
 
         } catch (CsrException ce) {
             throw ce;
